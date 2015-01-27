@@ -1,7 +1,8 @@
 # MonoTalk
 このライブラリはAndroid用のORマッピングライブラリです。
 煩雑な実装になりがちなAndroidのDB周辺実装を簡略化することを目的としています。  
-アンドロイドアプリを作っていたつもりでしたが、アプリはできずにライブラリが。。      
+アンドロイドアプリを作っていたつもりでしたが、アプリはできずにライブラリとなりました。
+
 [Active Android](https://github.com/pardom/ActiveAndroid), [Ollie](https://github.com/pardom/ollie/), [Sprinkles](https://github.com/emilsjolander/sprinkles),
 [DBFlow](https://github.com/Raizlabs/DBFlow),[greenDAO](http://greendao-orm.com),[DBFlute](http://dbflute.seasar.org),[S2JDBC](http://s2container.seasar.org/2.4/ja/s2jdbc.html)
 等の実装を参考にしながら作成しています。  
@@ -74,8 +75,8 @@ Applicationを継承したクラスに以下のような記述を追加してく
 @Columnアノテーションで作成するColumn名を指定します。  
 - @ColumnにはPK指定はできません。  
 (Create Table DDL実行時に、_id カラムをAUTOINCREMENT 指定の主キーとして作成します。)  
-- 自然キーとなる項目には、Columnアノテーションのuniqe属性、  
-もしくは、@UniqeアノテーションでUniqe制約を付与してください。  
+- 自然キーとなる項目には、Columnアノテーションのunique属性、  
+もしくは、@Uniqueアノテーションでunique制約を付与してください。  
 
 ```java
 	@Table(name = "NOTES")
@@ -123,7 +124,7 @@ UPDATE
 	EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
 	Notes notes = new Notes();
     long id = 111l;
-    notes.setId(id);
+    notes.id = id;
     notes.title = "Title1";
     notes.body = "Hello World1";
     manager.update(notes);
@@ -131,22 +132,22 @@ UPDATE
 	// ## Null除外する際は、updateExcludesNullが使用可能です。
 	Notes notes = new Notes();
     long id = 111l;
-    notes.setId(id);
+    notes.id = id;
     notes.title = null;
     notes.body = "Hello World1";
-	manager.updateExcludesNull(notes);
+    manager.updateExcludesNull(notes);
 	
-	// ## SQliteDatabaseと同じようなIFでの更新が可能です
+    // ## SQliteDatabaseと同じIFでの更新
     ContentValues value = new ContentValues();
     value.put(Notes.TITLE, "TEST");
     manager.updateById(Notes.class, value, 1l);
 ```
 DELETE
 ```java
-	EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+    EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     Notes notes = new Notes();
     long id = 111l;
-    notes.setId(id);
+    notes.id = id;
     manager.delete(notes);
 
     // Class と IDを指定して削除する
@@ -159,18 +160,47 @@ DELETE
 
 ### クエリオブジェクトを使用したCRUD  
 クエリオブジェクトはentitymanagrのnew...で始まるメソッドを使用して生成します。  
-
+INSERT
 ```java
     EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     manager.newInsertInto(Notes.class).value(Notes.TITLE, "TEST").execute();
 	
-	// monotalk.db.query.QueryBuilder#toValuesExcludesColumns()をstatic importして、
-	// EntityオブジェクトからContentsValueを生成して登録します。
-	EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+    // monotalk.db.query.QueryUtils#from()をstatic importして、 
+    // EntityオブジェクトからContentsValueを生成して登録します。
+    EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     Notes notes = new Notes();
     notes.body = "Hello World1";
-    manager.newInsertInto(Notes.class).values(toValuesExcludesColumns(notes, Notes.TITLE)).execute();
-	
+    manager.newInsert(Notes.class).values(from(notes, Notes.TITLE)).execute();
 	
 ```
-update,deleteについては今後ドキュメントを作成します。
+UPDATE
+```java
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+        manager.newUpdate(Notes.class).as("Notes")
+                .value("TITLE", "Hello")
+                .where("_id").eq(111l);
+        
+		
+        Notes notes = new Notes();
+        notes.id = 100l;
+        // monotalk.db.query.QueryUtils#idEquals()をstatic importして、 
+        // EntityオブジェクトからContentsValueを生成して登録します。
+        manager.newUpdate(Notes.class).as("Notes")
+                .value("TITLE", "Hello")
+                .where(idEquals(notes));
+       	
+```
+DELETE
+```java
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+        //  delete from notes where _id = 111;
+        manager.newDelete(Notes.class)
+               .where("_id").eq(111l);
+        //  delete from notes where _id in (11,22,33);
+        manager.newDelete(Notes.class)
+               .where("_id").in(11l,22l,33l);
+        //  delete from notes where DATE < "date.getTime();"
+        manager.newDelete(Notes.class)
+               .where("DATE").lt(new Date());
+
+```
