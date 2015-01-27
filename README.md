@@ -204,3 +204,93 @@ DELETE
                .where("DATE").lt(new Date());
 
 ```
+SELECT
+```java 
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+        
+        // Cursorで取得
+        Cursor cursor = manager.newSelect(
+                "TITLE",
+                "BODY",
+                "DATE")
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .orderBy("TITLE")
+                .limit(2)
+                .offset(3).selectCursor();
+
+        // Entity 1要素を取得
+        Notes notes = manager.newSelect(
+                "TITLE",
+                "BODY",
+                "DATE")
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .orderBy("TITLE")
+                .selectOne();
+
+        // EntityListで取得
+        List<Notes> noteList = manager.newSelect(
+                "TITLE",
+                "BODY",
+                "DATE")
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .orderBy("TITLE")
+                .selectList();
+
+        // LazyListで取得
+        LazyList<Notes> noteList = manager.newSelect(
+                "TITLE",
+                "BODY",
+                "DATE")
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .orderBy("TITLE")
+                .selectLazyList();
+
+        // スカラー値を取得
+        long count = manager.newSelect(countRowIdAsCount())
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .selectScalar(Long.class);
+
+        // Entityではないものにマッピングして取得
+        String title = manager.newSelect(countRowIdAsCount())
+                .from(Notes.class)
+                .where("DATE").eq(new Date())
+                .selectOne(new RowMapper<String>() {
+                    @Override
+                    public String mapRow(Cursor cursor) {
+                        return cursor.getString(cursor.getColumnIndex("TITLE"));
+                    }
+                });
+```
+
+### TWOWAYSQLを使用したSELECT  
+``` select.sql
+   SELECT 
+         TITLE,
+	 BODY,
+	 DATE
+    FROM 
+         NOTES 
+    /*BEGIN*/
+    WHERE
+        /*IF pmb.date != null*/ 
+	DATE = /*pmb.date*/33333333333
+	/*END*/ 
+    /*END*/ 
+```
+上記のクエリを以下の記述で実行可能です。
+仮に Notes.classのパッケージがcom.exampleであった場合は
+assetディレクトリ配下の asset/com/example/Notes/select.sql を参照し、実行します。
+
+```java
+    EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+    // cursorで取得
+    Cursor cursor = manager.newSelectBySqlFile(Notes.class, "select.sql")
+               .setParameter("date", new Date())
+               .selectCursor();
+```
+*TWOWAYSQL parser実装は、[DBFlute](http://dbflute.seasar.org)のTWOWAYSQL parserを拝借しています。
