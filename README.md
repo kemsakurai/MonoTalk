@@ -283,7 +283,7 @@ SELECT
     /*END*/ 
 ```
 上記のクエリを以下の記述で実行可能です。
-仮に Notes.classのパッケージがcom.exampleであった場合は
+仮に Notes.classのパッケージがcom.exampleであった場合は  
 assetディレクトリ配下の asset/com/example/Notes/select.sql を参照し、実行します。
 
 ```java
