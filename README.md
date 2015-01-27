@@ -69,14 +69,9 @@ Applicationを継承したクラスに以下のような記述を追加してく
 ## Entity(Table)クラスの作成
 
 - DATABASEのテーブル定義に対応するEntityクラスを作成します。  
-(初期化時にEntityクラスの指定が必要になるので、実際はこちらを先に実施すると思います。)  
-- EntityクラスはEntityを継承して作成する必要があります。  
+- EntityクラスはEntityを継承して作成します。
 - @Tableアノテーションで作成するTableを指定し、    
-@Columnアノテーションで作成するColumn名を指定します。  
-- @ColumnにはPK指定はできません。  
-(Create Table DDL実行時に、_id カラムをAUTOINCREMENT 指定の主キーとして作成します。)  
-- 自然キーとなる項目には、Columnアノテーションのunique属性、  
-もしくは、@Uniqueアノテーションでunique制約を付与してください。  
+  @Columnアノテーションで作成するColumn名を指定します。  
 
 ```java
 	@Table(name = "NOTES")
