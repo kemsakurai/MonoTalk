@@ -112,20 +112,11 @@
 
 <ul>
 <li>DATABASEのテーブル定義に対応するEntityクラスを作成します。<br>
-(初期化時にEntityクラスの指定が必要になるので、実際はこちらを先に実施すると思います。)<br>
 </li>
-<li>EntityクラスはEntityを継承して作成する必要があります。<br>
-</li>
+<li>EntityクラスはEntityを継承して作成します。</li>
 <li>
 <a href="https://github.com/Table" class="user-mention">@Table</a>アノテーションで作成するTableを指定し、<br>
 <a href="https://github.com/Column" class="user-mention">@Column</a>アノテーションで作成するColumn名を指定します。<br>
-</li>
-<li>
-<a href="https://github.com/Column" class="user-mention">@Column</a>にはPK指定はできません。<br>
-(Create Table DDL実行時に、_id カラムをAUTOINCREMENT 指定の主キーとして作成します。)<br>
-</li>
-<li>自然キーとなる項目には、Columnアノテーションのunique属性、<br>
-もしくは、<a href="https://github.com/Unique" class="user-mention">@Unique</a>アノテーションでunique制約を付与してください。<br>
 </li>
 </ul>
 
