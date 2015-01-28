@@ -11,7 +11,6 @@ public class TestContentProvider2 extends DatabaseContentProvider {
         builder.setVersion(1);
         builder.setDefalutDatabase(true);
         builder.setNodeCacheSize(1000);
-        builder.setTableCacheSize(1000);
         builder.addTable(TestModel4.class);
         return builder.create();
     }
@@ -19,10 +18,5 @@ public class TestContentProvider2 extends DatabaseContentProvider {
     @Override
     public String getAuthority() {
         return TestContentProvider2.class.getPackage().getName();
-    }
-
-    @Override
-    protected DBLog.LogLevel getLogLevel() {
-        return DBLog.LogLevel.DEBUG;
     }
 }

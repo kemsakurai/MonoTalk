@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import monotalk.db.DatabaseConnectionSource;
+import monotalk.db.exception.ConnectionSourceNotFoundException;
 
 import static monotalk.db.utility.AssertUtils.assertNotNull;
 
@@ -16,7 +17,6 @@ public class DBNameMappedEntityManagerFactory implements EntityManagerFactory {
 
     private String defaultDatabaseName;
     private Map<String, DatabaseConnectionSource> databaseConnectionMap = new ConcurrentHashMap<String, DatabaseConnectionSource>();
-
 
     public SQLiteOpenHelper getSQLiteOpenHelper() {
         assertNotNull(defaultDatabaseName, "defaultDatabaseName is null");
@@ -30,9 +30,12 @@ public class DBNameMappedEntityManagerFactory implements EntityManagerFactory {
 
     @Override
     public EntityManager newEntityManager(String name, EntityManagerType type) {
+        DatabaseConnectionSource connectionSource = databaseConnectionMap.get(name);
+        if (connectionSource == null) {
+            throw new ConnectionSourceNotFoundException(name);
+        }
         switch (type) {
             case DB_OPEN_HELPER:
-                DatabaseConnectionSource connectionSource = databaseConnectionMap.get(name);
                 DBOpenHelperEntityManager entityManager = DBOpenHelperEntityManager.newInstance(connectionSource);
                 return entityManager;
             default:

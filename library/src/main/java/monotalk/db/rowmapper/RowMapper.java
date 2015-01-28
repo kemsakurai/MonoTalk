@@ -10,7 +10,6 @@ import android.database.Cursor;
  * @author Kem
  */
 public interface RowMapper<T> {
-
     /**
      * Used to convert a results row to an object.
      *

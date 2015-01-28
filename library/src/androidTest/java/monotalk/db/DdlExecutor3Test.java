@@ -2,9 +2,7 @@ package monotalk.db;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
-import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
-import android.database.sqlite.SQLiteOpenHelper;
 
 import org.junit.After;
 import org.junit.Before;
@@ -20,12 +18,11 @@ import org.robolectric.shadows.ShadowLog;
 import java.util.List;
 
 import monotalk.db.manager.EntityManager;
-import monotalk.db.manager.EntityManagerType;
 import monotalk.db.rules.LogRule;
 import monotalk.db.shadows.PersistentShadowSQLiteOpenHelper;
 
 import static junit.framework.Assert.fail;
-import static monotalk.db.query.QueryBuilder.allColumns;
+import static monotalk.db.query.QueryUtils.allColumns;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
 
@@ -45,10 +42,7 @@ public class DdlExecutor3Test {
         Robolectric.shadowOf(contentResolver);
         ShadowContentResolver.registerProvider("monotalk.db.joinTest", contentProvider);
         contentProvider.onCreate();
-        SQLiteOpenHelper dbHelper = MonoTalk.getDbHelperByDbName("JoinSample");
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
-        dbHelper.onUpgrade(db, 1, 2);
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         manager.deleteAll(JoinTableTestModel2.class);
         manager.deleteAll(JoinTableTestModel3.class);
         manager.deleteAll(JoinTableTestModel4.class);
@@ -61,9 +55,9 @@ public class DdlExecutor3Test {
 
     @Test
     public void insetOnlyChildShoudBeError() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         JoinTableTestModel2 model2 = new JoinTableTestModel2();
-        model2.setId(111l);
+        model2.id = 111l;
         model2.testTableId = 222l;
         try {
             manager.insertExcludesNull(model2);
@@ -72,9 +66,8 @@ public class DdlExecutor3Test {
             assertThat(e.getMessage(), is("Cannot execute for last inserted row ID, base error code: 19"));
         }
 
-        manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
         JoinTableTestModel3 model3 = new JoinTableTestModel3();
-        model3.setId(111l);
+        model3.id = 111l;
         model3.testTableId = 222l;
         try {
             manager.insertExcludesNull(model3);
@@ -86,7 +79,7 @@ public class DdlExecutor3Test {
 
     @Test
     public void deleteChildTableData() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         JoinTableTestModel1 model1 = new JoinTableTestModel1();
         model1.columnString = "TEST";
         long id = manager.insertExcludesNull(model1);
@@ -100,7 +93,8 @@ public class DdlExecutor3Test {
             manager.deleteAll(model1.getClass());
             fail("外部キー制約エラーとなるため、ここには到達しないはず。");
         } catch (SQLiteException e) {
-            assertThat(e.getMessage(), is("Cannot execute for changed row count, base error code: 19"));
+//            assertThat(e.getMessage(), is("Cannot execute for changed row count, base error code: 19"));
+            assertThat(e.getMessage(), is("Cannot execute, base error code: 19"));
         }
         manager.deleteAll(model2.getClass());
         manager.deleteAll(model1.getClass());
@@ -112,7 +106,7 @@ public class DdlExecutor3Test {
 
     @Test
     public void deleteChildTableDataWithModel() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         JoinTableTestModel1 model1 = new JoinTableTestModel1();
         model1.columnString = "TEST";
         long id = manager.insertExcludesNull(model1);
@@ -126,7 +120,7 @@ public class DdlExecutor3Test {
 
     @Test
     public void entityCacheTest() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         JoinTableTestModel1 model11 = new JoinTableTestModel1();
         model11.columnString = "TEST11";
         long id = manager.insertExcludesNull(model11);
@@ -134,7 +128,7 @@ public class DdlExecutor3Test {
         model41.model1 = model11;
         for (int i = 0; i < 2000; i++) {
             manager.insert(model41);
-            model41.setId(null);
+            model41.id = null;
         }
 
         JoinTableTestModel1 model12 = new JoinTableTestModel1();
@@ -144,7 +138,7 @@ public class DdlExecutor3Test {
         model42.model1 = model12;
         for (int i = 0; i < 2000; i++) {
             manager.insert(model42);
-            model42.setId(null);
+            model42.id = null;
         }
 
         List<JoinTableTestModel4> model4s = manager

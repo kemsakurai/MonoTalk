@@ -8,7 +8,7 @@ import android.os.Build;
 import android.os.CancellationSignal;
 
 /**
- * Basic class which provides no-op methods for all Android version.
+ * Basic class which provides no-op methods for allColumns Android version.
  * <p/>
  * <p>
  * <b>NOTE:</b> Will show as in error if compiled with previous Android versions.

@@ -1,15 +1,9 @@
 package monotalk.db;
 
-import android.annotation.SuppressLint;
-import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.text.TextUtils;
 
-import org.seasar.dbflute.cbean.SimpleMapPmb;
-
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 public class UriUtils {
 
@@ -19,11 +13,38 @@ public class UriUtils {
     }
 
     /**
+     * コンテンツプロバイダー用のTABLEのベースURIを返します。
+     *
+     * @param authorityUri
+     * @param tableName
+     * @return URI
+     */
+    public static Uri buildEntityUri(Uri authorityUri, String tableName) {
+        if (TextUtils.isEmpty(tableName)) {
+            throw new IllegalArgumentException("tableName is empty");
+        }
+        // URIを作成し返す
+        return authorityUri.buildUpon().path("/" + tableName.toLowerCase(Locale.getDefault())).build();
+    }
+
+    /**
+     * コンテンツプロバイダー用のTABLEのベースURIを返します。
+     *
+     * @param authorityUri
+     * @param clazz
+     * @param <T>
+     * @return
+     */
+    public static <T extends Entity> Uri buildEntityUri(Uri authorityUri, Class<T> clazz) {
+        return buildEntityUri(authorityUri, MonoTalk.getTableName(clazz));
+    }
+
+    /**
      * <p>
      * トランザクション開始URIを取得する
      * </p>
      *
-     * @param clazz テーブルクラス
+     * @param authorityUri
      * @return トランザクション開始URI
      */
     public static Uri buildBeginTransactionUri(Uri authorityUri) {
@@ -44,169 +65,12 @@ public class UriUtils {
     }
 
     /**
-     * コンテンツプロバイダー用のTABLEのベースURIを返す
-     *
-     * @param authorityUri
-     * @param tableName
-     * @return URI
-     */
-    public static Uri buildEntityUri(Uri authorityUri, String tableName) {
-        if (TextUtils.isEmpty(tableName)) {
-            throw new IllegalArgumentException("tableName is empty");
-        }
-        // ===================================================
-        // cut parts for URI path
-        //      table="TABLE_NAME INNER JOIN ----"
-        //      table="TABLE_NAME1 , TABLE_NAME2 ----"
-        //      table="TABLE_NAME LEFT OUTER JOIN ----"の形式となる場合があるので、
-        //      TABLE_NAMEのみを切り出している
-        // ===================================================
-        String tmpTableName = SQLiteDatabase.findEditTable(tableName);
-        // URIを作成し返す
-        return authorityUri.buildUpon().path("/" + tmpTableName.toLowerCase(Locale.getDefault())).build();
-    }
-
-    /**
-     * コンテンツプロバイダーSELECTクエリ用のURIを生成する
-     *
-     * @param authorityUri
-     * @param tableName
-     * @param limit
-     * @param having
-     * @param groupBy
-     * @param distinct
-     * @return
-     */
-    public static Uri buildQueryUri(Uri authorityUri, String tableName, String limit, String having, String groupBy,
-                                    boolean distinct) {
-        // create baseUri
-        Uri baseUri = buildEntityUri(authorityUri, tableName);
-        Uri.Builder uriBuilder = baseUri.buildUpon();
-
-        // LIMIT句が設定されている場合はGETパラメータに設定
-        if (!TextUtils.isEmpty(limit)) {
-            uriBuilder.appendQueryParameter("_limit", limit);
-        }
-        // HAVING句が設定されている場合はGETパラメータに設定
-        if (!TextUtils.isEmpty(having)) {
-            uriBuilder.appendQueryParameter("_having", having);
-        }
-        // GROUPBY句が設定されている場合はGETパラメータに設定
-        if (!TextUtils.isEmpty(groupBy)) {
-            uriBuilder.appendQueryParameter("_groupBy", groupBy);
-        }
-        // GROUPBY句が設定されている場合はGETパラメータに設定
-        uriBuilder.appendQueryParameter("_distinct", Boolean.toString(distinct));
-        return uriBuilder.build();
-    }
-
-    /**
-     * @param authorityUri
-     * @param sqlFilePath
-     * @param mapPmb
-     * @return
-     */
-    public static Uri buildTwoWaySqlUri(Uri authorityUri, String tableName, String sqlFilePath, SimpleMapPmb<Object> mapPmb) {
-        // create baseUri
-        Uri baseUri = buildEntityUri(authorityUri, tableName);
-        Uri.Builder uriBuilder = baseUri.buildUpon();
-
-        // SQLIDが指定されている場合は、SQLIDを設定
-        if (!TextUtils.isEmpty(sqlFilePath)) {
-            uriBuilder.appendQueryParameter("_sqlFilePath", sqlFilePath);
-        }
-
-        // mapPmbが設定されている場合は、mapPmbを設定する
-        if (mapPmb != null) {
-            for (Map.Entry<String, Object> entry : mapPmb.getParameterMap().entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                if (value instanceof Iterable) {
-                    @SuppressWarnings("rawtypes")
-                    Iterable elems = (Iterable) value;
-                    for (Object elem : elems) {
-                        uriBuilder.appendQueryParameter(key, String.valueOf(elem));
-                    }
-                } else {
-                    if (value != null) {
-                        uriBuilder.appendQueryParameter(key, String.valueOf(value));
-                    }
-                }
-                // create Key List
-                uriBuilder.appendQueryParameter("_key", key);
-            }
-        }
-        return uriBuilder.build();
-    }
-
-    /**
-     * <p>
      * yieldIfContendedのURIを取得する
-     * </p>
      *
-     * @param con     コンテキスト
-     * @param builder クエリクラス
+     * @param authorityUri
      */
     public static Uri buildYieldIfContendedUri(Uri authorityUri) {
         return buildYieldIfContendedUri(authorityUri, 0);
-    }
-
-    @SuppressLint("NewApi")
-    public static SimpleMapPmb<Object> createSimpleMapPmbFromUri(Uri uri) {
-        SimpleMapPmb<Object> mapPmb = new SimpleMapPmb<Object>();
-        List<String> keys = uri.getQueryParameters("_key");
-        for (String key : keys) {
-            List<String> values = uri.getQueryParameters(key);
-            if (values.isEmpty()) {
-                mapPmb.addParameter(key, null);
-            } else if (values.size() == 1) {
-                mapPmb.addParameter(key, values.get(0));
-            } else if (values.size() > 1) {
-                mapPmb.addParameter(key, values);
-            }
-        }
-        return mapPmb;
-    }
-
-    /**
-     * GroupBy句を取得する
-     *
-     * @param uri
-     * @return
-     */
-    public static String getGroupBy(Uri uri) {
-        return uri.getQueryParameter("_groupBy");
-    }
-
-    /**
-     * Having句を取得する
-     *
-     * @param uri
-     * @return
-     */
-    public static String getHaving(Uri uri) {
-        return uri.getQueryParameter("_having");
-    }
-
-    /**
-     * Limit句を取得する
-     *
-     * @param uri
-     * @return
-     */
-    public static String getLimit(Uri uri) {
-        return uri.getQueryParameter("_limit");
-    }
-
-    /**
-     * distinct句を取得する
-     *
-     * @param uri
-     * @return
-     */
-    public static boolean getDistinct(Uri uri) {
-        String distinct = uri.getQueryParameter("_distinct");
-        return Boolean.valueOf(distinct);
     }
 
     /**

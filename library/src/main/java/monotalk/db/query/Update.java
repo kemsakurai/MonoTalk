@@ -2,12 +2,14 @@ package monotalk.db.query;
 
 import android.content.ContentValues;
 
-import java.util.Map.Entry;
-
 import monotalk.db.Entity;
 import monotalk.db.MonoTalk;
 import monotalk.db.querydata.UpdateQueryData;
-import monotalk.db.utility.ConvertUtils;
+import monotalk.db.typeconverter.TypeConverter;
+import monotalk.db.typeconverter.TypeConverterCache;
+
+import static monotalk.db.query.QueryUtils.excludesNullFrom;
+import static monotalk.db.query.QueryUtils.from;
 
 /*
  * Copyright (C) 2010 Michael Pardo
@@ -22,7 +24,7 @@ import monotalk.db.utility.ConvertUtils;
  * specific language governing permissions and limitations under the License.
  */
 
-public final class Update<T extends Entity> implements Sqlable {
+public final class Update<T extends Entity> {
     private Class<T> type;
     private String alias;
     private QueryCrudHandler crudProcessor;
@@ -33,23 +35,23 @@ public final class Update<T extends Entity> implements Sqlable {
     }
 
     public Set value(String key, Object value) {
-        return new Set(this, key, value, type);
+        return new Set(key, value, type);
     }
 
     public Set valuesExcludesNull(T object) {
-        return new Set(this, type, object, true);
+        return new Set(type, object, true);
     }
 
     public Set values(T object) {
-        return new Set(this, type, object, false);
+        return new Set(type, object, false);
     }
 
     public Set values(T object, String... inculdeColumns) {
-        return new Set(this, type, object, inculdeColumns);
+        return new Set(type, object, inculdeColumns);
     }
 
     public Set values(ContentValues values) {
-        return new Set(this, values, type);
+        return new Set(values, type);
     }
 
     public Update<T> as(String alias) {
@@ -57,53 +59,57 @@ public final class Update<T extends Entity> implements Sqlable {
         return this;
     }
 
-    @Override
-    public String toSql() {
-        StringBuilder sql = new StringBuilder();
-        sql.append("UPDATE ");
-        sql.append(MonoTalk.getTableName(type));
-        sql.append(" ");
-        if (alias != null) {
-            sql.append(alias);
-            sql.append(" ");
-        }
-        return sql.toString();
-    }
-
     public class Set extends AbstractFrom<T, Set> implements Executable<Integer> {
 
         private ContentValues mValues;
 
-        Set(Sqlable queryBase, Class<T> type, T object, boolean isExuludedNull) {
-            super(type, queryBase);
+        Set(Class<T> type, T object, boolean isExuludedNull) {
+            super(type);
             if (isExuludedNull) {
-                mValues = QueryBuilder.toValuesExcludesNull(object);
+                mValues = excludesNullFrom(object);
             } else {
-                mValues = QueryBuilder.toValues(object);
+                mValues = from(object);
             }
             selection = new Selection();
         }
 
-        Set(Sqlable queryBase, Class<T> type, T object, String... includeColums) {
-            super(type, queryBase);
-            mValues = QueryBuilder.toValues(object, includeColums);
+        Set(Class<T> type, T object, String... includeColums) {
+            super(type);
+            mValues = from(object, includeColums);
             selection = new Selection();
         }
 
-        Set(Sqlable queryBase, ContentValues values, Class<T> type) {
-            super(type, queryBase);
+        Set(ContentValues values, Class<T> type) {
+            super(type);
             mValues = values;
         }
 
-        Set(Sqlable queryBase, String key, Object value, Class<T> type) {
-            super(type, queryBase);
+        Set(String key, Object value, Class<T> type) {
+            super(type);
             mValues = new ContentValues();
-            ConvertUtils.addValue(key, value, mValues);
+            if (value == null) {
+                mValues.putNull(key);
+                return;
+            } else {
+                Class<?> fieldType = value.getClass();
+                @SuppressWarnings("rawtypes")
+                final TypeConverter typeConverter = TypeConverterCache.getTypeConverterOrThrow(fieldType);
+                // serialize data
+                typeConverter.pack(value, mValues, key);
+            }
             selection = new Selection();
         }
 
         public Set value(String key, String value) {
-            ConvertUtils.addValue(key, value, mValues);
+            if (value == null) {
+                mValues.putNull(key);
+            } else {
+                Class<?> fieldType = value.getClass();
+                @SuppressWarnings("rawtypes")
+                final TypeConverter typeConverter = TypeConverterCache.getTypeConverterOrThrow(fieldType);
+                // serialize data
+                typeConverter.pack(value, mValues, key);
+            }
             return this;
         }
 
@@ -122,21 +128,6 @@ public final class Update<T extends Entity> implements Sqlable {
             data.setSelectionArgs(selection.getSelectionArgs());
             data.setWhere(selection.getSelection());
             return data;
-        }
-
-        @Override
-        public String toSql() {
-            StringBuilder sql = new StringBuilder();
-            sql.append(baseDmlQuery.toSql());
-            sql.append("SET ");
-            for (Entry<String, Object> entry : mValues.valueSet()) {
-                sql.append(entry.getKey() + " = " + entry.getValue());
-                sql.append(",");
-            }
-            sql.delete(sql.length() - 1, sql.length());
-            sql.append(" ");
-            sql.append(selection.toSql());
-            return sql.toString();
         }
     }
 }

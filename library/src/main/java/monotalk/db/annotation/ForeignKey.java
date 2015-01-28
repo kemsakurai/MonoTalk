@@ -54,7 +54,7 @@ public @interface ForeignKey {
         NONE(null),
         /**
          * If the configured action is "SET NULL", then when a parent key is deleted (for ON DELETE SET NULL) or
-         * modified (for ON UPDATE SET NULL), the child key columns of all rows in the child table that mapped to the
+         * modified (for ON UPDATE SET NULL), the child key columns of allColumns rows in the child table that mapped to the
          * parent key are set to contain SQL NULL values.
          */
         SET_NULL("SET NULL"),

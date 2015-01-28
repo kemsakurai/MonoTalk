@@ -1,32 +1,37 @@
 /*******************************************************************************
- * Copyright (C) 2012-2013 Kem
+ * Copyright (C) 2013-2015 Kem
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  ******************************************************************************/
 package monotalk.db.manager;
 
+import android.content.ContentProviderOperation;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.support.v4.content.CursorLoader;
 
-import org.seasar.dbflute.cbean.SimpleMapPmb;
-
 import java.util.List;
 
 import monotalk.db.DatabaseConnectionSource;
+import monotalk.db.DmlExecutor;
 import monotalk.db.Entity;
-import monotalk.db.SqlManager;
+import monotalk.db.TransactionManager;
 import monotalk.db.query.DeleteOperationBuilder;
 import monotalk.db.query.InsertOperationBuilder;
 import monotalk.db.query.QueryCrudHandler;
 import monotalk.db.query.UpdateOperationBuilder;
+import monotalk.db.querydata.SelectQueryData;
+import monotalk.db.querydata.TwoWayQueryData;
 
 /**
  * EntityManagerの実装クラス
@@ -36,7 +41,12 @@ public class DBOpenHelperEntityManager extends BaseEntityManager implements Quer
     /**
      * SQLiteOpenHelper クラス
      */
-    private SqlManager mSqlManager = null;
+    private DmlExecutor mDmlExecutor = null;
+
+    /**
+     * TransactionManager クラス
+     */
+    private TransactionManager txManager = null;
 
     /**
      * Constructor
@@ -44,10 +54,10 @@ public class DBOpenHelperEntityManager extends BaseEntityManager implements Quer
      * @param connectionSource Database接続情報
      */
     private DBOpenHelperEntityManager(DatabaseConnectionSource connectionSource) {
-        super(connectionSource);
-        mSqlManager = new SqlManager(connectionSource);
+        mDmlExecutor = new DmlExecutor(connectionSource);
+        txManager = new TransactionManager(connectionSource.getDbHelper());
     }
-    
+
     /**
      * インスタンスを生成する
      *
@@ -60,78 +70,36 @@ public class DBOpenHelperEntityManager extends BaseEntityManager implements Quer
 
     @Override
     public void beginTransactionNonExclusive() {
-        mSqlManager.beginTransactionNonExclusive();
+        txManager.beginTransactionNonExclusive();
     }
 
     @Override
     public <T extends Entity> int bulkInsert(List<T> entities) {
-        return mSqlManager.bulkInsert(entities, null);
+        return mDmlExecutor.bulkInsert(entities);
     }
 
     @Override
     public <T extends Entity> int bulkUpdate(List<T> entities) {
-        return mSqlManager.bulkUpdate(entities, null);
+        return mDmlExecutor.bulkUpdate(entities);
     }
 
     @Override
     public <T extends Entity> int bulkDelete(List<T> entities) {
-        return mSqlManager.bulkDelete(entities, null);
+        return mDmlExecutor.bulkDelete(entities);
     }
 
     @Override
-    protected CursorLoader buildLoader(boolean distinct, String tableName, String[] columns, String where, String groupBy,
-                                       String having, String orderBy, String limit, Object[] selectionArgs) {
+    public ContentProviderOperation newUpdateByIdOperation(Class<? extends Entity> clazz, ContentValues value, long id) {
         throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    protected CursorLoader buildLoader(String entityPath, String sqlFilePath, SimpleMapPmb<Object> mapPmb) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public int delete(String tableName, String whereClause, Object... whereArgs) {
-        return mSqlManager.delete(tableName, whereClause, null, whereArgs);
-    }
-
-    @Override
-    public void endTransaction() {
-        mSqlManager.endTransaction();
-    }
-
-    @Override
-    public Cursor selectCursorBySql(String sql, Object... selectionArgs) {
-        return mSqlManager.selectCursorBySql(sql, null, selectionArgs);
-    }
-
-    @Override
-    protected Cursor selectCursor(boolean distinct, String tableName, String[] columns, String where, String groupBy, String having, String orderBy, String limit, Object[] selectionArgs) {
-        return mSqlManager.selectCursor(distinct, tableName, columns, where, groupBy, having, orderBy, limit, selectionArgs, null);
-    }
-
-    @Override
-    protected Cursor selectCursorBySqlFile(String entityPath, String sqlFilePath, SimpleMapPmb<Object> mapPmb) {
-        return mSqlManager.selectCursorBySqlFile(sqlFilePath, mapPmb, null);
-    }
-
-
-    @Override
-    public long insert(String tableName, ContentValues values) {
-        return mSqlManager.insert(tableName, values, null);
-    }
-
-    @Override
-    public void setTransactionSuccessful() {
-        mSqlManager.setTransactionSuccessful();
-    }
-
-    @Override
-    public int update(String tableName, ContentValues data, String selection, Object... selectionArgs) {
-        return mSqlManager.update(tableName, data, selection, null, selectionArgs);
     }
 
     @Override
     public UpdateOperationBuilder newUpdateOperationBuilder(Class<? extends Entity> clazz) {
+        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+    }
+
+    @Override
+    public ContentProviderOperation newDeleteByIdOperation(Class<? extends Entity> clazz, long id) {
         throw new UnsupportedOperationException("This Method is Unsupported!!!");
     }
 
@@ -146,12 +114,62 @@ public class DBOpenHelperEntityManager extends BaseEntityManager implements Quer
     }
 
     @Override
+    public void endTransaction() {
+        txManager.endTransaction();
+    }
+
+    @Override
+    public Cursor selectCursorBySql(String sql, Object... selectionArgs) {
+        return mDmlExecutor.selectCursorBySql(sql, selectionArgs);
+    }
+
+    @Override
+    public void setTransactionSuccessful() {
+        txManager.setTransactionSuccessful();
+    }
+
+    @Override
     public boolean yieldIfContendedSafely() {
-        return mSqlManager.yieldIfContendedSafely();
+        return txManager.yieldIfContendedSafely();
     }
 
     @Override
     public boolean yieldIfContendedSafely(int sleepAfterYieldDelay) {
-        return mSqlManager.yieldIfContendedSafely(sleepAfterYieldDelay);
+        return txManager.yieldIfContendedSafely(sleepAfterYieldDelay);
+    }
+
+    @Override
+    public int update(String tableName, ContentValues data, String selection, Object... selectionArgs) {
+        return mDmlExecutor.update(tableName, data, selection, selectionArgs);
+    }
+
+    @Override
+    public int delete(String tableName, String whereClause, Object... whereArgs) {
+        return mDmlExecutor.delete(tableName, whereClause, whereArgs);
+    }
+
+    @Override
+    public long insert(String tableName, ContentValues values) {
+        return mDmlExecutor.insert(tableName, values, null);
+    }
+
+    @Override
+    public CursorLoader buildLoader(SelectQueryData data) {
+        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+    }
+
+    @Override
+    public Cursor selectCursor(SelectQueryData data) {
+        return mDmlExecutor.selectCursorBySql(data.toSql(), data.getSelectionArgs());
+    }
+
+    @Override
+    public CursorLoader buildLoader(TwoWayQueryData data) {
+        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+    }
+
+    @Override
+    public Cursor selectCursorBySqlFile(TwoWayQueryData data) {
+        return mDmlExecutor.selectCursorBySqlFile(data.getSqlFilePath(), data.getMapPmb());
     }
 }

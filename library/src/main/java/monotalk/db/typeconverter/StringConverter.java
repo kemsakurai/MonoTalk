@@ -3,6 +3,7 @@ package monotalk.db.typeconverter;
 import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
+import android.database.sqlite.SQLiteProgram;
 
 public class StringConverter extends BaseTypeConverter<String> {
 
@@ -22,7 +23,7 @@ public class StringConverter extends BaseTypeConverter<String> {
     }
 
     @Override
-    public String toBindSql(String object) {
+    public String toStringBindArg(String object) {
         return object;
     }
 
@@ -31,4 +32,8 @@ public class StringConverter extends BaseTypeConverter<String> {
         return SQLiteType.TEXT;
     }
 
+    @Override
+    public void bind(SQLiteProgram program, int index, String value) {
+        program.bindString(index, value);
+    }
 }

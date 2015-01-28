@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright (C) 2013-2015 Kem
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package monotalk.db.rowmapper;
 
 import android.database.Cursor;
@@ -5,107 +20,69 @@ import android.database.Cursor;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import monotalk.db.Entity;
+import monotalk.db.FieldInfo;
 import monotalk.db.MonoTalk;
-import monotalk.db.manager.EntityCache;
+import monotalk.db.exception.IllegalAccessRuntimeException;
+import monotalk.db.manager.EntityManager;
 import monotalk.db.typeconverter.TypeConverter;
-import monotalk.db.typeconverter.TypeConverterCache;
 import monotalk.db.utility.ReflectUtils;
 
 public class EntityRowMapper<T extends Entity> implements RowMapper<T> {
 
     private Class<T> mType;
-    private EntityCache entityCache;
+    private EntityManager mEntityManager;
+    private List<FieldInfo> infos;
 
-    public EntityRowMapper(Class<T> clazz, EntityCache entityCache) {
-        mType = clazz;
-        this.entityCache = entityCache;
-        if (entityCache != null) {
-            this.entityCache.evictAllEntity();
-        }
+    public EntityRowMapper(Class<T> clazz) {
+        this.mType = clazz;
+        this.infos = MonoTalk.getTableInfo(mType).getFieldInfos();
+    }
+
+    public EntityRowMapper(Class<T> clazz, EntityManager entityManager) {
+        this.mType = clazz;
+        this.infos = MonoTalk.getTableInfo(mType).getFieldInfos();
+        this.mEntityManager = entityManager;
+
     }
 
     @SuppressWarnings("unchecked")
     public T mapRow(Cursor cursor) {
+        T result = ReflectUtils.newInstance(mType);
+        List<String> colNames = Arrays.asList(cursor.getColumnNames());
         try {
-            Map<Field, String> map = MonoTalk.getTableInfo(mType).getColumnNamesMap();
-            T result = mType.newInstance();
-            List<String> colNames = Arrays.asList(cursor.getColumnNames());
-            for (Map.Entry<Field, String> entry : map.entrySet()) {
-                String columnName = entry.getValue();
+            for (FieldInfo info : infos) {
+                String columnName = info.getColumnName();
                 if (!colNames.contains(columnName)) {
                     continue;
                 }
-                Field field = entry.getKey();
-                field.setAccessible(true);
+                Field field = info.getField();
                 int columnIndex = cursor.getColumnIndexOrThrow(columnName);
+                field.setAccessible(true);
                 if (cursor.isNull(columnIndex)) {
-                    field.set(result, null);
+                    // If NULL, use the initial value
                     continue;
                 }
-                final Class<?> type = field.getType();
-                TypeConverter<?> typeConverter = TypeConverterCache.getTypeConverter(type);
-                if (typeConverter != null) {
-                    Object o = typeConverter.unpack(cursor, columnName);
+                TypeConverter typeConverter = info.getConverter();
+                Object o = typeConverter.unpack(cursor, columnName);
+                if (!info.isEntity()) {
                     field.set(result, o);
                     continue;
                 }
-
-                // ----------------------------------------------------------------
-                // if Block By Field's Type
-                // ----------------------------------------------------------------
-                // TODO: Find a smarter way to do this? This if block is
-                // necessary because we
-                // can't know the type until runtime.
-                Object value = null;
-                if (type.equals(Byte.class) || type.equals(byte.class)) {
-                    value = cursor.getInt(columnIndex);
-                } else if (type.equals(Short.class) || type.equals(short.class)) {
-                    value = cursor.getInt(columnIndex);
-                } else if (type.equals(Integer.class) || type.equals(int.class)) {
-                    value = cursor.getInt(columnIndex);
-                } else if (type.equals(Long.class) || type.equals(long.class)) {
-                    value = cursor.getLong(columnIndex);
-                } else if (type.equals(Float.class) || type.equals(float.class)) {
-                    value = cursor.getFloat(columnIndex);
-                } else if (type.equals(Double.class) || type.equals(double.class)) {
-                    value = cursor.getDouble(columnIndex);
-                } else if (type.equals(Boolean.class) || type.equals(boolean.class)) {
-                    value = cursor.getInt(columnIndex) != 0;
-                } else if (type.equals(Character.class) || type.equals(char.class)) {
-                    value = cursor.getString(columnIndex).charAt(0);
-                } else if (type.equals(String.class)) {
-                    value = cursor.getString(columnIndex);
-                } else if (type.equals(Byte[].class) || type.equals(byte[].class)) {
-                    value = cursor.getBlob(columnIndex);
-                } else if (ReflectUtils.isEntity(type)) {
-                    final long entityId = cursor.getLong(columnIndex);
-                    final Class<? extends Entity> entityType = (Class<? extends Entity>) type;
-                    Entity entity = null;
-                    if (entityCache != null) {
-                        entity = entityCache.getEntityOrSelect(entityType, entityId);
-                    }
-                    if (entity == null) {
-                        entity = ReflectUtils.invokeConstructor(entityType, null);
-                        Field idField = MonoTalk.getTableInfo(entityType).getIdField();
-                        idField.set(entity, entityId);
-                    }
-                    value = entity;
-                } else if (ReflectUtils.isSubclassOf(type, Enum.class)) {
-                    @SuppressWarnings("rawtypes")
-                    final Class<? extends Enum> enumType = (Class<? extends Enum>) type;
-                    value = Enum.valueOf(enumType, cursor.getString(columnIndex));
+                // ------------------------------------
+                // ## process for Entity 1to1 relation
+                // ------------------------------------
+                Entity entity = (Entity) o;
+                Class<? extends Entity> entityClass = entity.getClass();
+                if (mEntityManager != null) {
+                    entity = mEntityManager.selectOneById(entityClass, entity.id);
                 }
-                // Set the field value
-                if (value != null) {
-                    field.set(result, value);
-                }
+                field.set(result, entity);
             }
-            return result;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        } catch (IllegalAccessException e) {
+            throw new IllegalAccessRuntimeException(e);
         }
+        return result;
     }
 }

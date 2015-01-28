@@ -9,33 +9,33 @@ import java.util.List;
  */
 public class DatabaseProviderConnectionSource {
     private List<Class<? extends Entity>> entityClasses;
-    private DatabaseConnectionSource connectionSource;
     private String authority;
     private boolean isDefaultAuthority = true;
 
+    private String databaseName;
+
     private DatabaseProviderConnectionSource(Builder builder) {
         entityClasses = builder.entityClasses;
-        connectionSource = builder.connectionSource;
         authority = builder.authority;
         isDefaultAuthority = builder.isDefaultAuthority;
+        databaseName = builder.databaseName;
     }
 
     @Override
     public String toString() {
         return "DatabaseProviderConnectionSource{" +
                 "entityClasses=" + entityClasses +
-                ", connectionSource=" + connectionSource +
                 ", authority='" + authority + '\'' +
                 ", isDefaultAuthority=" + isDefaultAuthority +
                 '}';
     }
 
-    public boolean isDefaultAuthority() {
-        return isDefaultAuthority;
+    public String getDatabaseName() {
+        return databaseName;
     }
 
-    public DatabaseConnectionSource getConnectionSource() {
-        return connectionSource;
+    public boolean isDefaultAuthority() {
+        return isDefaultAuthority;
     }
 
     public Uri getAuthorityUri() {
@@ -52,9 +52,9 @@ public class DatabaseProviderConnectionSource {
 
     public static final class Builder {
         private List<Class<? extends Entity>> entityClasses;
-        private DatabaseConnectionSource connectionSource;
         private String authority;
         private boolean isDefaultAuthority;
+        private String databaseName;
 
         public Builder() {
         }
@@ -64,8 +64,8 @@ public class DatabaseProviderConnectionSource {
             return this;
         }
 
-        public Builder connectionSource(DatabaseConnectionSource connectionSource) {
-            this.connectionSource = connectionSource;
+        public Builder databaseName(String databaseName) {
+            this.databaseName = databaseName;
             return this;
         }
 

@@ -3,7 +3,7 @@ package monotalk.db.query;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Selection extends AbstractSelection implements Sqlable {
+public class Selection extends AbstractSelection {
     private StringBuilder selection = null;
     private List<Object> selectionArgs = null;
 
@@ -59,17 +59,6 @@ public class Selection extends AbstractSelection implements Sqlable {
         appendOrCondition(clause);
         addArguments(args);
         return this;
-    }
-
-    @Override
-    public String toSql() {
-        StringBuilder sql = new StringBuilder();
-        if (sql.length() > 0) {
-            sql.append("WHERE ");
-            sql.append(sql);
-            sql.append(" ");
-        }
-        return sql.toString();
     }
 
     public Expressions<Selection> where(String clause) {

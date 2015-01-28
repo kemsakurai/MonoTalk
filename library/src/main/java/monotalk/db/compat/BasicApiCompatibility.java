@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.database.sqlite.SQLiteTransactionListener;
 
 /**
- * Basic class which provides no-op methods for all Android version.
+ * Basic class which provides no-op methods for allColumns Android version.
  *
  * @author graywatson
  */

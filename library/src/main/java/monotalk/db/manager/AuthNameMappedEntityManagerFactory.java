@@ -3,9 +3,9 @@ package monotalk.db.manager;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import monotalk.db.DatabaseConnectionSource;
 import monotalk.db.DatabaseProviderConnectionSource;
 import monotalk.db.MonoTalk;
+import monotalk.db.exception.ConnectionSourceNotFoundException;
 
 import static monotalk.db.utility.AssertUtils.assertNotNull;
 
@@ -20,11 +20,13 @@ public class AuthNameMappedEntityManagerFactory implements EntityManagerFactory 
     @Override
     public EntityManager newEntityManager(String name, EntityManagerType type) {
         DatabaseProviderConnectionSource providerSource = provierConnectionMap.get(name);
+        if (providerSource == null) {
+            throw new ConnectionSourceNotFoundException(name);
+        }
         EntityManager entityManager = null;
         switch (type) {
             case DB_OPEN_HELPER:
-                entityManager = DBOpenHelperEntityManager.newInstance(providerSource.getConnectionSource());
-                return entityManager;
+                return MonoTalk.getDBManagerByDbName(providerSource.getDatabaseName());
             case CONTENTES_PROVIER:
                 entityManager = DBContentsProviderEntityManager.newInstance(providerSource, MonoTalk.getContext());
                 return entityManager;
@@ -35,7 +37,7 @@ public class AuthNameMappedEntityManagerFactory implements EntityManagerFactory 
                 throw new UnsupportedOperationException("Not Support Entity Type... Type = [" + type + "]");
         }
     }
-    
+
     @Override
     public EntityManager newEntityManager(EntityManagerType type) {
         assertNotNull(defaultAuthority, "defaultAuthority is null");

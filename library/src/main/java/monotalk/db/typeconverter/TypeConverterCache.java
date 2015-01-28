@@ -9,6 +9,34 @@ import java.util.Map;
 import monotalk.db.exception.NoTypeSerializerFoundException;
 
 public class TypeConverterCache {
+
+    @SuppressWarnings("rawtypes")
+    public static TypeConverter getTypeConverter(Class<?> key) {
+        TypeConverter converter = sTypeSerializers.get(key);
+        return sTypeSerializers.get(key);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static TypeConverter getTypeConverterOrThrow(Class<?> key) {
+        if (!sTypeSerializers.containsKey(key)) {
+            throw new NoTypeSerializerFoundException(key);
+        }
+        return sTypeSerializers.get(key);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static TypeConverter registerTypeConverter(Class<?> key, TypeConverter typeConverter) {
+        if (!sTypeSerializers.containsKey(key)) {
+            return sTypeSerializers.put(key, typeConverter);
+        }
+        return sTypeSerializers.get(key);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static TypeConverter overrideRegisterTypeConverter(Class<?> key, TypeConverter typeConverter) {
+        return sTypeSerializers.put(key, typeConverter);
+    }
+
     private static Map<Class<?>, TypeConverter<?>> sTypeSerializers = new HashMap<Class<?>, TypeConverter<?>>() {
         private static final long serialVersionUID = -4911605630739752012L;
 
@@ -44,18 +72,4 @@ public class TypeConverterCache {
             put(byte[].class, new ByteArrayConverter());
         }
     };
-
-    @SuppressWarnings("rawtypes")
-    public static TypeConverter getTypeConverter(Class<?> key) {
-        TypeConverter converter = sTypeSerializers.get(key);
-        return sTypeSerializers.get(key);
-    }
-
-    @SuppressWarnings("rawtypes")
-    public static TypeConverter getTypeConverterOrThrow(Class<?> key) {
-        if (!sTypeSerializers.containsKey(key)) {
-            throw new NoTypeSerializerFoundException(key);
-        }
-        return sTypeSerializers.get(key);
-    }
 }

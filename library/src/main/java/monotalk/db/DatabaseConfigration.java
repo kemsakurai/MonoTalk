@@ -25,17 +25,15 @@ public class DatabaseConfigration {
     private String dataBaseName;
     private boolean isDefaultDatabase = true;
     private int nodeCacheSize;
-    private int tableCacheSize;
     private List<Class<? extends Entity>> entityList;
     private SparseArray<Migration> migrations;
     private int version;
 
-    DatabaseConfigration(String dataBaseName, int version, int tableCacheSize,
+    DatabaseConfigration(String dataBaseName, int version,
                          int nodeCacheSize, List<Class<? extends Entity>> entityList, boolean isDefalutDatabase, SparseArray<Migration> migrations) {
         super();
         this.dataBaseName = dataBaseName;
         this.version = version;
-        this.tableCacheSize = tableCacheSize;
         this.nodeCacheSize = nodeCacheSize;
         this.entityList = entityList;
         this.isDefaultDatabase = isDefalutDatabase;
@@ -52,10 +50,6 @@ public class DatabaseConfigration {
 
     public int getNodeCacheSize() {
         return nodeCacheSize;
-    }
-
-    public int getTableCacheSize() {
-        return tableCacheSize;
     }
 
     public List<Class<? extends Entity>> getEntityList() {
@@ -80,8 +74,6 @@ public class DatabaseConfigration {
                 .append(isDefaultDatabase)
                 .append(", nodeCacheSize=")
                 .append(nodeCacheSize)
-                .append(", tableCacheSize=")
-                .append(tableCacheSize)
                 .append(", entityList=")
                 .append(entityList)
                 .append(", version=")
@@ -94,15 +86,14 @@ public class DatabaseConfigration {
     // Builder
     // ===================================================================================
     public static class Builder {
-        private static final int DEFAULT_CACHE_SIZE = 1024;
+        private static final int DEFAULT_NODE_CACHE_SIZE = 50;
         // ===================================================================================
         // Member Filed
         // ===================================================================================
         private String dataBaseName;
         private boolean isDefalutDatabase;
         private int nodeCacheSize;
-        private int tableCacheSize;
-        private List<Class<? extends Entity>> tableList;
+        private List<Class<? extends Entity>> entityList;
         private int version;
         private SparseArray<Migration> migrations;
 
@@ -110,18 +101,17 @@ public class DatabaseConfigration {
         // Constructor
         // ===================================================================================
         public Builder() {
-            tableCacheSize = DEFAULT_CACHE_SIZE;
-            nodeCacheSize = DEFAULT_CACHE_SIZE;
+            nodeCacheSize = DEFAULT_NODE_CACHE_SIZE;
         }
 
         // ===================================================================================
         // public method
         // ===================================================================================
         public Builder addTable(Class<? extends Entity> table) {
-            if (tableList == null) {
-                tableList = new ArrayList<Class<? extends Entity>>();
+            if (entityList == null) {
+                entityList = new ArrayList<Class<? extends Entity>>();
             }
-            tableList.add(table);
+            entityList.add(table);
             return this;
         }
 
@@ -129,9 +119,8 @@ public class DatabaseConfigration {
             return new DatabaseConfigration(
                     dataBaseName,
                     version,
-                    tableCacheSize,
                     nodeCacheSize,
-                    tableList,
+                    entityList,
                     isDefalutDatabase,
                     migrations);
         }
@@ -158,13 +147,8 @@ public class DatabaseConfigration {
             return this;
         }
 
-        public Builder setTableCacheSize(int tableCacheSize) {
-            this.tableCacheSize = tableCacheSize;
-            return this;
-        }
-
-        public Builder setTableList(List<Class<? extends Entity>> tables) {
-            tableList = tables;
+        public Builder setEntityList(List<Class<? extends Entity>> entities) {
+            entityList = entities;
             return this;
         }
 

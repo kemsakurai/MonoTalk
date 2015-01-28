@@ -12,8 +12,6 @@ public class JoinTableTestContentProvider extends DatabaseContentProvider {
         builder.setDataBaseName("JoinSample");
         builder.setVersion(1);
         builder.setDefalutDatabase(true);
-        builder.setNodeCacheSize(1000);
-        builder.setTableCacheSize(1000);
         builder.addMigration(1, new Migration() {
             @Override
             public void upgradeMigrate(SQLiteDatabase db) {
@@ -52,10 +50,5 @@ public class JoinTableTestContentProvider extends DatabaseContentProvider {
     @Override
     public String getAuthority() {
         return "monotalk.db.joinTest";
-    }
-
-    @Override
-    protected DBLog.LogLevel getLogLevel() {
-        return DBLog.LogLevel.DEBUG;
     }
 }

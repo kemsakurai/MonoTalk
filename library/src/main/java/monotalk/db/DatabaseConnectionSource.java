@@ -16,10 +16,7 @@
 package monotalk.db;
 
 import android.content.Context;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteStatement;
 import android.support.v4.util.LruCache;
-import android.util.Log;
 
 import org.seasar.dbflute.twowaysql.factory.DefaultSqlAnalyzerFactory;
 import org.seasar.dbflute.twowaysql.factory.SqlAnalyzerFactory;
@@ -37,7 +34,6 @@ public class DatabaseConnectionSource {
     private DatabaseOpenHelper dbHelper;
     private String dataBaseName;
     private LruCache<String, Node> nodeCache;
-    private LruCache<String, Entity> entityCache;
     private List<Class<? extends Entity>> entityClasses;
     private Map<Class<? extends Entity>, TableStatement> tableStatements;
     private int version;
@@ -58,17 +54,8 @@ public class DatabaseConnectionSource {
                 config.getEntityList(),
                 config.getMigrations());
 
-        /* TableCache */
-        this.entityCache = new LruCache<String, Entity>(config.getTableCacheSize());
-
         /* NodeCache */
-        this.nodeCache = new LruCache<String, Node>(config.getNodeCacheSize()) {
-            @Override
-            protected void entryRemoved(boolean evicted, String key, Node oldValue, Node newValue) {
-                DBLog.d(TAG_NAME, "entryRemoved called..");
-                super.entryRemoved(evicted, key, oldValue, newValue);
-            }
-        };
+        this.nodeCache = new LruCache<String, Node>(config.getNodeCacheSize());
 
         this.tableStatements = new HashMap<Class<? extends Entity>, TableStatement>();
         for (Class<? extends Entity> entity : config.getEntityList()) {
@@ -123,18 +110,6 @@ public class DatabaseConnectionSource {
         return getNode(MonoTalk.getContext(), sqlFilePath);
     }
 
-    public void putEntity(String key, Entity value) {
-        entityCache.put(key, value);
-    }
-
-    public Entity getEntity(String key) {
-        return entityCache.get(key);
-    }
-
-    public void evictAllEntity() {
-        entityCache.evictAll();
-    }
-
     public int getVersion() {
         return version;
     }
@@ -146,7 +121,6 @@ public class DatabaseConnectionSource {
                 .append(", dbHelper=").append(dbHelper).append(ln())
                 .append(", dataBaseName=").append(dataBaseName).append(ln())
                 .append(", nodeCache=").append(nodeCache).append(ln())
-                .append(", entityCache=").append(entityCache).append(ln())
                 .append(", entityClasses=").append(entityClasses).append(ln())
                 .append(", version=").append(version).append(ln())
                 .append("]");

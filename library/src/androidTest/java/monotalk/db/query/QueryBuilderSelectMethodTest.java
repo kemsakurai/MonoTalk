@@ -1,5 +1,7 @@
 package monotalk.db.query;
 
+import android.content.ContentProvider;
+import android.content.ContentResolver;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 
@@ -10,24 +12,27 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowContentResolver;
 
 import java.util.Date;
 
 import monotalk.db.DBLog;
-import monotalk.db.DBLog.LogLevel;
 import monotalk.db.DatabaseConfigration;
 import monotalk.db.Entity;
 import monotalk.db.MonoTalk;
+import monotalk.db.TestContentProvider1;
 import monotalk.db.TestModel1;
 import monotalk.db.TestModel2;
+import monotalk.db.TestModel3;
 import monotalk.db.manager.EntityManager;
+import monotalk.db.manager.EntityManagerType;
 import monotalk.db.rules.LogRule;
 import monotalk.db.shadows.PersistentShadowSQLiteOpenHelper;
 import monotalk.db.utility.CursorUtils;
 
-import static monotalk.db.query.QueryBuilder.allColumns;
-import static monotalk.db.query.QueryBuilder.countRowIdAsCount;
-import static monotalk.db.query.QueryBuilder.idEquals;
+import static monotalk.db.query.QueryUtils.allColumns;
+import static monotalk.db.query.QueryUtils.countRowIdAsCount;
+import static monotalk.db.query.QueryUtils.idEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -41,33 +46,27 @@ public class QueryBuilderSelectMethodTest {
 
     @Before
     public void before() {
-        MonoTalk.dispose();
-        MonoTalk.init(Robolectric.application.getApplicationContext(), LogLevel.VERBOSE);
-        try {
-            String authority = "test";
-            DatabaseConfigration config = createDatabaseConfigration(authority);
-            MonoTalk.registerDatabaseConnectionSource(config);
-            SQLiteDatabase db = MonoTalk.getDbHelperByDefaultDbName().getWritableDatabase();
-            MonoTalk.getDbHelperByDefaultDbName().onUpgrade(db, 0, 0);
-        } catch (Exception e) {
-            // Do Nothing...
-        }
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
-        manager.deleteAll(TestModel1.class);
+        ContentProvider contentProvider = new TestContentProvider1();
+        ContentResolver contentResolver = Robolectric.application.getContentResolver();
+        Robolectric.shadowOf(contentResolver);
+        ShadowContentResolver.registerProvider("monotalk.db", contentProvider);
+        contentProvider.onCreate();
+        SQLiteDatabase db = MonoTalk.getWritableDatabaseByDbName("Sample");
+        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        manager.deleteAll(TestModel3.class);
         manager.deleteAll(TestModel2.class);
-        SQLiteDatabase db = MonoTalk.getDbHelperByDefaultDbName().getWritableDatabase();
+        manager.deleteAll(TestModel1.class);
         db.execSQL("DELETE FROM sqlite_sequence WHERE name = 'TEST_TABLE1'");
         db.execSQL("DELETE FROM sqlite_sequence WHERE name = 'TEST_TABLE2'");
-
+        db.execSQL("DELETE FROM sqlite_sequence WHERE name = 'TEST_TABLE3'");
     }
 
-    protected DatabaseConfigration createDatabaseConfigration(String authority) {
+    protected DatabaseConfigration createDatabaseConfigration() {
         DatabaseConfigration.Builder builder = new DatabaseConfigration.Builder();
         builder.setDataBaseName("Sample");
         builder.setVersion(2);
         builder.setDefalutDatabase(true);
         builder.setNodeCacheSize(1000);
-        builder.setTableCacheSize(1000);
         builder.addTable(TestModel1.class);
         builder.addTable(TestModel2.class);
         return builder.create();
@@ -78,27 +77,25 @@ public class QueryBuilderSelectMethodTest {
         // ============================================================
         // insert data
         // ============================================================
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel1 model = new TestModel1();
         model.columnLong = 100L;
         model.columnBoolean = true;
         model.columnString = "TEST";
         model.dateColumn = new Date();
-        Insert<TestModel1> insert = manager.newInsertInto(TestModel1.class).values(model);
-        DBLog.d(DBLog.getTag(getClass()), "INSERT_SQL=[" + insert.toSql() + "]");
+        Insert<TestModel1> insert = manager.newInsert(TestModel1.class).values(model);
         long id = insert.execute();
 
         // ============================================================
         // newSelect data
         // ============================================================
         Select.From<TestModel1> from = manager.newSelect(allColumns(TestModel1.class)).from(TestModel1.class);
-        DBLog.d(DBLog.getTag(getClass()), "SELECT_SQL=[" + from.toSql() + "]");
         model = from.selectOne();
 
         // ============================================================
         // verify
         // ============================================================
-        assertEquals((long) model.getId(), id);
+        assertEquals((long) model.id, id);
     }
 
     @Test
@@ -106,14 +103,13 @@ public class QueryBuilderSelectMethodTest {
         // ============================================================
         // insert data
         // ============================================================
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel1 model = new TestModel1();
         model.columnLong = null;
         model.columnBoolean = false;
         model.columnString = "TEST";
         model.dateColumn = new Date();
-        Insert<TestModel1> insert = manager.newInsertInto(TestModel1.class).values(model);
-        DBLog.d(DBLog.getTag(getClass()), "INSERT_SQL=[" + insert.toSql() + "]");
+        Insert<TestModel1> insert = manager.newInsert(TestModel1.class).values(model);
         long id = insert.execute();
         // ============================================================
         // newSelect data
@@ -122,7 +118,6 @@ public class QueryBuilderSelectMethodTest {
                 .newSelect(allColumns(TestModel1.class))
                 .from(TestModel1.class)
                 .where(idEquals(TestModel1.class, id));
-        DBLog.d(DBLog.getTag(getClass()), "SELECT_SQL=[" + from.toSql() + "]");
 
         // ============================================================
         // verify
@@ -133,35 +128,22 @@ public class QueryBuilderSelectMethodTest {
 
     @Test
     public void selectJoin() {
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         // ============================================================
         // insert data
         // ============================================================
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
-        TestModel1 model = new TestModel1();
-        model.setId(100L);
-        model.columnLong = 10000L;
-        model.columnBoolean = false;
-        model.columnString = "TEST";
-        model.dateColumn = new Date();
-        Insert<TestModel1> insert = manager
-                .newInsertInto(TestModel1.class)
-                .values(model);
+        executeInnerJoinTest(manager);
+    }
 
-        DBLog.d(DBLog.getTag(getClass()), "INSERT_SQL=[" + insert.toSql() + "]");
-        long id = insert.execute();
-
-        TestModel2 model2 = new TestModel2();
-        model2.columnBoolean = true;
-        model2.testTableId = id;
-        model2.columnLong = null;
-        model2.columnString = "TEST_TEST";
-        model2.dateColumn = new Date(model.dateColumn.getTime() + 1000000);
-        manager.newInsertInto(TestModel2.class).values(model2).execute();
+    private void executeInnerJoinTest(EntityManager manager) {
+        // ============================================================
+        // insert data
+        // ============================================================
+        insertInnerJoinData();
 
         // ============================================================
         // newSelect data
         // ============================================================
-        manager = MonoTalk.getDBHelperManagerByDefaultDbName();
         Select.From<TestModel2> from = manager
                 .newSelect(
                         "TEST_MODEL._id as TEST_MODEL_id",
@@ -174,9 +156,10 @@ public class QueryBuilderSelectMethodTest {
                 .innerJoin(TestModel1.class)
                 .as("TEST_MODEL")
                 .on("TEST_MODEL._id = TEST_MODEL2.TEST_TABLE_ID");
-
         Cursor cursor = from.selectCursor();
+
         DBLog.d(DBLog.getTag(getClass()), cursor);
+
         long model2Id = 0;
         long testTableId = 0;
         if (cursor.moveToFirst()) {
@@ -192,24 +175,47 @@ public class QueryBuilderSelectMethodTest {
         assertEquals(testTableId, 100);
     }
 
+    private void insertInnerJoinData() {
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
+        TestModel1 model = new TestModel1();
+        model.id = 100L;
+        model.columnLong = 10000L;
+        model.columnBoolean = false;
+        model.columnString = "TEST";
+        model.dateColumn = new Date();
+        Insert<TestModel1> insert = manager
+                .newInsert(TestModel1.class)
+                .values(model);
+
+        long id = insert.execute();
+
+        TestModel2 model2 = new TestModel2();
+        model2.columnBoolean = true;
+        model2.testTableId = id;
+        model2.columnLong = null;
+        model2.columnString = "TEST_TEST";
+        model2.dateColumn = new Date(model.dateColumn.getTime() + 1000000);
+        manager.newInsert(TestModel2.class).values(model2).execute();
+    }
+
     @Test
     public void selectOuterJoin() {
         // ============================================================
         // insert data
         // ============================================================
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel2 model2 = new TestModel2();
         model2.columnBoolean = true;
         model2.testTableId = 200l;
         model2.columnLong = null;
         model2.columnString = "TEST_TEST";
         model2.dateColumn = new Date(1000000);
-        manager.newInsertInto(TestModel2.class).values(model2).execute();
+        manager.newInsert(TestModel2.class).values(model2).execute();
 
         // ============================================================
         // newSelect data
         // ============================================================
-        manager = MonoTalk.getDBHelperManagerByDefaultDbName();
+        manager = MonoTalk.getDBManagerByDefaultDbName();
         Select.From<? extends Entity> from = manager
                 .newSelect(
                         "TEST_MODEL._id as TEST_MODEL_id",
@@ -250,27 +256,31 @@ public class QueryBuilderSelectMethodTest {
         // ============================================================
         // insert data
         // ============================================================
-        EntityManager manager = MonoTalk.getDBHelperManagerByDefaultDbName();
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel1 model = new TestModel1();
         model.columnLong = null;
         model.columnBoolean = false;
         model.columnString = "TEST";
         model.dateColumn = new Date();
-        Insert<TestModel1> insert = manager.newInsertInto(TestModel1.class).values(model);
+        Insert<TestModel1> insert = manager.newInsert(TestModel1.class).values(model);
 
-        DBLog.d(DBLog.getTag(getClass()), "INSERT_SQL=[" + insert.toSql() + "]");
         insert.execute();
         insert.execute();
         // ============================================================
         // newSelect data
         // ============================================================
         Select.From<TestModel1> from = manager.newSelect(countRowIdAsCount()).from(TestModel1.class);
-        DBLog.d(DBLog.getTag(getClass()), "SELECT_SQL=[" + from.toSql() + "]");
 
         // ============================================================
         // verify
         // ============================================================
         long count = from.selectScalar(Long.class);
         DBLog.d(DBLog.getTag(getClass()), "SELECT_COUNT_RESULT=[" + count + "]");
+    }
+
+    @Test
+    public void selectJoinContentsProvider() {
+        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.CONTENTES_PROVIER);
+        executeInnerJoinTest(manager);
     }
 }

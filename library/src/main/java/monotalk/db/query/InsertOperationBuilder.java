@@ -5,11 +5,11 @@ import android.content.ContentValues;
 import android.net.Uri;
 
 import monotalk.db.Entity;
-import monotalk.db.MonoTalk;
 import monotalk.db.UriUtils;
 import monotalk.db.typeconverter.TypeConverter;
 import monotalk.db.typeconverter.TypeConverterCache;
 
+import static monotalk.db.query.QueryUtils.from;
 import static monotalk.db.utility.AssertUtils.assertNotNull;
 
 /**
@@ -21,41 +21,41 @@ public class InsertOperationBuilder<T extends Entity> {
     public InsertOperationBuilder(Uri authorityUri, Class<T> clazz) {
         assertNotNull(authorityUri, "authorityUri is null");
         assertNotNull(clazz, "clazz is null");
-        Uri uri = UriUtils.buildEntityUri(authorityUri, MonoTalk.getTableName(clazz));
+        Uri uri = UriUtils.buildEntityUri(authorityUri, clazz);
         builder = ContentProviderOperation.newInsert(uri);
     }
 
-    public InsertOperationBuilder withValueBackReference(String key, int previousResult) {
+    public InsertOperationBuilder valueBackReference(String key, int previousResult) {
         builder.withValueBackReference(key, previousResult);
         return this;
     }
 
-    public InsertOperationBuilder withValues(T entity) {
-        builder.withValues(QueryBuilder.toValues(entity));
+    public InsertOperationBuilder values(T entity) {
+        builder.withValues(from(entity));
         return this;
     }
 
-    public InsertOperationBuilder withValues(T entity, String... includesColumns) {
-        builder.withValues(QueryBuilder.toValues(entity, includesColumns));
+    public InsertOperationBuilder values(T entity, String... includesColumns) {
+        builder.withValues(from(entity, includesColumns));
         return this;
     }
 
-    public InsertOperationBuilder withValuesExcludesNull(T entity) {
-        builder.withValues(QueryBuilder.toValues(entity));
+    public InsertOperationBuilder valuesExcludesNull(T entity) {
+        builder.withValues(from(entity));
         return this;
     }
 
-    public InsertOperationBuilder withValues(ContentValues values) {
+    public InsertOperationBuilder values(ContentValues values) {
         builder.withValues(values);
         return this;
     }
 
-    public InsertOperationBuilder withValueBackReferences(ContentValues backReferences) {
+    public InsertOperationBuilder valueBackReferences(ContentValues backReferences) {
         builder.withValueBackReferences(backReferences);
         return this;
     }
 
-    public InsertOperationBuilder withValue(String key, Object value) {
+    public InsertOperationBuilder value(String key, Object value) {
         ContentValues values = new ContentValues();
         TypeConverter typeConverter = TypeConverterCache.getTypeConverter(value.getClass());
         if (typeConverter != null) {
@@ -65,7 +65,7 @@ public class InsertOperationBuilder<T extends Entity> {
         return this;
     }
 
-    public InsertOperationBuilder withYieldAllowed(boolean yieldAllowed) {
+    public InsertOperationBuilder yieldAllowed(boolean yieldAllowed) {
         builder.withYieldAllowed(yieldAllowed);
         return this;
     }

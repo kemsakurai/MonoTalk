@@ -1,11 +1,11 @@
 /*******************************************************************************
- * Copyright (C) 2012-2013 Kem
+ * Copyright (C) 2013-2015 Kem
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,16 +15,19 @@
  ******************************************************************************/
 package monotalk.db;
 
-import android.support.v4.util.Pair;
 import android.text.TextUtils;
 
 import java.lang.reflect.Field;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import monotalk.db.annotation.Column;
 import monotalk.db.annotation.Table;
 import monotalk.db.annotation.View;
+import monotalk.db.typeconverter.EntityConverter;
+import monotalk.db.typeconverter.EnumConverter;
+import monotalk.db.typeconverter.TypeConverterCache;
 import monotalk.db.utility.ReflectUtils;
 
 import static monotalk.db.utility.StringUtils.ln;
@@ -33,27 +36,40 @@ public class TableInfo {
     //////////////////////////////////////////////////////////////////////////////////////
     // Field
     //////////////////////////////////////////////////////////////////////////////////////
-    private Map<Field, String> columnNamesMap = new LinkedHashMap<Field, String>();
-    private Pair<Field, String> idInfo;
+    private FieldInfo idFieldInfo;
+    private List<FieldInfo> fieldInfos;
     private String tableName;
     private String[] columnNames;
-    private Field[] fields;
     private Class<? extends Entity> type;
+//    private Map<Class<? extends Entity>, String> joinKeyColumns;
 
     // ////////////////////////////////////////////////////////////////////////////////////
     // CONSTRUCTORS
     // ////////////////////////////////////////////////////////////////////////////////////
     public TableInfo(Class<? extends Entity> type) {
+        // --------
+        // Add TypeConverter
+        // ------------------------
+        // ## Add TypeConverter for Entity.class
+        TypeConverterCache.registerTypeConverter(type, new EntityConverter(type));
+
         this.type = type;
         this.tableName = getTableNameFromTableAnnotation(type);
+        this.fieldInfos = new ArrayList<FieldInfo>();
+//        this.joinKeyColumns = new HashMap<Class<? extends Entity>, String>();
+
+        List<String> columnNameList = new ArrayList<String>();
+
         // Manually add the id column since it is not declared like the other
         // columns.
         Field idField = ReflectUtils.getIdField();
         if (idField != null) {
             Column column = idField.getAnnotation(Column.class);
             String columnName = column.name();
-            this.idInfo = Pair.create(idField, columnName);
-            this.columnNamesMap.put(idField, columnName);
+            Class<?> filedType = idField.getType();
+            this.idFieldInfo = newFieldInfo(idField, columnName, filedType);
+            this.fieldInfos.add(idFieldInfo);
+            columnNameList.add(columnName);
         }
 
         Field[] fields = type.getDeclaredFields();
@@ -65,13 +81,30 @@ public class TableInfo {
                     if (TextUtils.isEmpty(columnName)) {
                         columnName = field.getName();
                     }
-                    this.columnNamesMap.put(field, columnName);
+                    Class<?> filedType = field.getType();
+                    // --------
+                    // Add TypeConverter
+                    // ------------------------
+                    // ## for Enum.class
+                    if (ReflectUtils.isSubclassOf(filedType, Enum.class)) {
+                        TypeConverterCache.registerTypeConverter(filedType, new EnumConverter(filedType));
+                    } else if (ReflectUtils.isEntity(filedType)) {
+                        // ## for Entity.class
+                        TypeConverterCache.registerTypeConverter(filedType, new EntityConverter(type));
+                    }
+                    FieldInfo fieldInfo = newFieldInfo(field, columnName, filedType);
+                    this.fieldInfos.add(fieldInfo);
+                    columnNameList.add(columnName);
                 }
+//                if (field.isAnnotationPresent(ForeignKey.class)) {
+//                    final ForeignKey foreignKey = field.getAnnotation(ForeignKey.class);
+//                    Class<? extends Entity> entityClass = foreignKey.entityClass();
+//                    this.joinKeyColumns.put(entityClass, columnAnnotation.name());
+//                }
             }
         }
-        this.fields = columnNamesMap.keySet().toArray(new Field[0]);
-        columnNames = columnNamesMap.values().toArray(new String[0]);
-        // -----------------------------------------------------------------------------
+        columnNames = columnNameList.toArray(new String[0]);
+        // ---------
         // Debug
         // -----------------------------------------------------------------------------
         DBLog.d(DBLog.getTag(this.getClass()), "TableInfo Construct end...>>>>" + this);
@@ -93,28 +126,31 @@ public class TableInfo {
         return tableName;
     }
 
+    private FieldInfo newFieldInfo(Field field, String columnName, Class<?> filedType) {
+        return new FieldInfo(field, columnName, TypeConverterCache.getTypeConverterOrThrow(filedType), ReflectUtils.isEntity(filedType));
+    }
+
+    @Override
+    public String toString() {
+        return "TableInfo{" + ln() +
+                "idFieldInfo=" + idFieldInfo + ln() +
+                ", fieldInfos=" + fieldInfos + ln() +
+                ", tableName='" + tableName + ln() +
+                ", columnNames=" + Arrays.toString(columnNames) + ln() +
+                ", type=" + type + ln() +
+                '}';
+    }
+
     public String[] getColumnNames() {
         return columnNames;
     }
 
-    public String getColumnName(Field key) {
-        return columnNamesMap.get(key);
-    }
-
-    public Field[] getFields() {
-        return fields;
-    }
-
-    public Map<Field, String> getColumnNamesMap() {
-        return columnNamesMap;
-    }
-
     public Field getIdField() {
-        return idInfo.first;
+        return idFieldInfo.getField();
     }
 
     public String getIdName() {
-        return idInfo.second;
+        return idFieldInfo.getColumnName();
     }
 
     public Class<? extends Entity> getType() {
@@ -125,28 +161,7 @@ public class TableInfo {
         return tableName;
     }
 
-    @Override
-    public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("TableInfo [").append(ln());
-        if (columnNamesMap != null) {
-            builder.append("columnNamesMap=").append(columnNamesMap).append(", ").append(ln());
-        }
-        if (this.idInfo != null) {
-            if (idInfo.first != null) {
-                builder.append("idField=").append(idInfo.first).append(", ").append(ln());
-            }
-            if (idInfo.second != null) {
-                builder.append("idName=").append(idInfo.second).append(", ").append(ln());
-            }
-        }
-        if (tableName != null) {
-            builder.append("tableName=").append(tableName).append(", ").append(ln());
-        }
-        if (type != null) {
-            builder.append("type=").append(type).append(", ").append(ln());
-        }
-        builder.append("]").append(ln());
-        return builder.toString();
+    public List<FieldInfo> getFieldInfos() {
+        return fieldInfos;
     }
 }

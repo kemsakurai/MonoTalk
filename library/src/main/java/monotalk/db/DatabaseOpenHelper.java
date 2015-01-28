@@ -37,18 +37,12 @@ public class DatabaseOpenHelper extends SQLiteOpenHelper {
      */
     private final static String TAG_NAME = DBLog.getTag(DatabaseOpenHelper.class);
     private List<Class<? extends Entity>> entityClasses;
-    private String databaseName;
     private SparseArray<Migration> migrations;
 
     public DatabaseOpenHelper(Context context, String name, int version, List<Class<? extends Entity>> tableClasses, SparseArray<Migration> migrations) {
         super(context, name, DBLog.isLoggable(LogLevel.VERBOSE) ? new LoggingCursorAdapter() : null, version);
         this.entityClasses = tableClasses;
-        this.databaseName = name;
         this.migrations = migrations;
-    }
-
-    public String getDatabaseNameCompat() {
-        return databaseName;
     }
 
     /**
@@ -75,8 +69,7 @@ public class DatabaseOpenHelper extends SQLiteOpenHelper {
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         // Log出力
-        DBLog.i(TAG_NAME, "onUpgrade() start oldVersion = {%1$s} newVersion = {%2$s}", new Object[]{oldVersion,
-                newVersion});
+        DBLog.i(TAG_NAME, "onUpgrade() start oldVersion = {%1$s} newVersion = {%2$s}", new Object[]{oldVersion, newVersion});
         executePragmasForeignKeysOn(db);
         if (migrations != null) {
             for (int i = oldVersion; i < newVersion; i++) {
@@ -91,8 +84,7 @@ public class DatabaseOpenHelper extends SQLiteOpenHelper {
     @Override
     public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         // Log出力
-        DBLog.i(TAG_NAME, "onDowngrade() start oldVersion = {%1$s} newVersion = {%2$s}", new Object[]{oldVersion,
-                newVersion});
+        DBLog.i(TAG_NAME, "onDowngrade() start oldVersion = {%1$s} newVersion = {%2$s}", new Object[]{oldVersion, newVersion});
         executePragmasForeignKeysOn(db);
         if (migrations != null) {
             for (int i = oldVersion - 1; i >= newVersion; i--) {
@@ -109,7 +101,7 @@ public class DatabaseOpenHelper extends SQLiteOpenHelper {
     public void onOpen(SQLiteDatabase db) {
         executePragmasForeignKeysOn(db);
     }
-    
+
     private void executePragmasForeignKeysOn(SQLiteDatabase db) {
         if (!db.isReadOnly()) {
             DdlExecutor executor = new DdlExecutor(db);

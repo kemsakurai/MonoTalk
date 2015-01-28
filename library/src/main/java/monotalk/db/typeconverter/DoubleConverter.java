@@ -2,6 +2,7 @@ package monotalk.db.typeconverter;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteProgram;
 
 public class DoubleConverter extends BaseTypeConverter<Double> {
 
@@ -21,7 +22,7 @@ public class DoubleConverter extends BaseTypeConverter<Double> {
     }
 
     @Override
-    public String toBindSql(Double object) {
+    public String toStringBindArg(Double object) {
         return String.valueOf(object);
     }
 
@@ -30,4 +31,8 @@ public class DoubleConverter extends BaseTypeConverter<Double> {
         return SQLiteType.REAL;
     }
 
+    @Override
+    public void bind(SQLiteProgram program, int index, Double value) {
+        program.bindDouble(index, value);
+    }
 }

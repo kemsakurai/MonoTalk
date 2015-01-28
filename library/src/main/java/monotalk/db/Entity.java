@@ -1,11 +1,11 @@
 /*******************************************************************************
- * Copyright (C) 2012-2013 Kem
+ * Copyright (C) 2013-2015 Kem
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,15 +29,7 @@ public abstract class Entity implements BaseColumns {
 
     @Id
     @Column(name = BaseColumns._ID)
-    protected Long id;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public Long id;
 
     @Override
     public boolean equals(Object o) {
@@ -47,7 +39,7 @@ public abstract class Entity implements BaseColumns {
         if (!id.equals(entity.id)) return false;
         return true;
     }
-    
+
     @Override
     public int hashCode() {
         return id.hashCode();

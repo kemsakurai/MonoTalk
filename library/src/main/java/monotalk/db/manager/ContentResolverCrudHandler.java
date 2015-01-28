@@ -46,7 +46,6 @@ class ContentResolverCrudHandler implements ProviderCrudHandler {
         } catch (OperationApplicationException e) {
             throw new OperationApplicationRuntimeException(e);
         }
-
     }
 
     @Override

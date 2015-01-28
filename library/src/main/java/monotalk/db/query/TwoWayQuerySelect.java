@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Locale;
 
 import monotalk.db.Entity;
+import monotalk.db.LazyList;
 import monotalk.db.MonoTalk;
 import monotalk.db.querydata.TwoWayQueryData;
+import monotalk.db.rowmapper.RowListMapper;
 import monotalk.db.rowmapper.RowMapper;
 import monotalk.db.utility.ResourceUtis;
 
@@ -26,12 +28,21 @@ public class TwoWayQuerySelect<T extends Entity> implements Selectable {
         this.type = entity;
     }
 
-    public TwoWayQuerySelect<T> addParameter(String key, Object value) {
+    public TwoWayQuerySelect<T> setParameter(String key, Object value) {
         if (mapPmb == null) {
             mapPmb = new SimpleMapPmb<Object>();
         }
         mapPmb.addParameter(key, value);
         return this;
+    }
+
+    private TwoWayQueryData createQueryData() {
+        TwoWayQueryData data = new TwoWayQueryData();
+        String tableName = MonoTalk.getTableName(type).toLowerCase(Locale.getDefault());
+        data.setTableName(tableName);
+        data.setMapPmb(mapPmb);
+        data.setSqlFilePath(sqlFilePath);
+        return data;
     }
 
     @Override
@@ -40,19 +51,16 @@ public class TwoWayQuerySelect<T extends Entity> implements Selectable {
         return manager.buildLoader(data);
     }
 
-    private TwoWayQueryData createQueryData() {
-        TwoWayQueryData data = new TwoWayQueryData();
-        String entityPath = MonoTalk.getTableName(type).toLowerCase(Locale.getDefault());
-        data.setTableName(entityPath);
-        data.setMapPmb(mapPmb);
-        data.setSqlFilePath(sqlFilePath);
-        return data;
-    }
-
     @Override
     public Cursor selectCursor() {
         TwoWayQueryData data = createQueryData();
         return manager.selectCursorBySqlFile(data);
+    }
+
+    @Override
+    public LazyList<T> selectLazyList() {
+        TwoWayQueryData data = createQueryData();
+        return manager.selectLazyList(type, data);
     }
 
     @SuppressWarnings("unchecked")
@@ -82,7 +90,7 @@ public class TwoWayQuerySelect<T extends Entity> implements Selectable {
     }
 
     @Override
-    public <E> List<E> selectList(RowMapper<E> mapper) {
+    public <E> List<E> selectList(RowListMapper<E> mapper) {
         TwoWayQueryData data = createQueryData();
         return manager.selectListBySqlFile(mapper, data);
     }

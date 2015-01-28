@@ -17,39 +17,29 @@ import monotalk.db.querydata.DeleteQueryData;
  * specific language governing permissions and limitations under the License.
  */
 
-public final class Delete implements Sqlable {
+public final class Delete {
 
     QueryCrudHandler crudHandler;
 
+    /**
+     * Constructor
+     *
+     * @param crudHandler
+     */
     public Delete(QueryCrudHandler crudHandler) {
         this.crudHandler = crudHandler;
     }
 
     public <T extends Entity> From<T> from(Class<T> table) {
-        return new From<T>(table, this);
+        return new From<T>(table);
     }
 
-    @Override
-    public String toSql() {
-        return "DELETE ";
-    }
-
-    public class From<T extends Entity> extends AbstractFrom<T, From<T>> implements Sqlable,
+    public class From<T extends Entity> extends AbstractFrom<T, From<T>> implements
             Executable<Integer> {
-
-        From(Class<T> table, Sqlable queryBase) {
-            super(table, queryBase);
+        From(Class<T> table) {
+            super(table);
         }
-
-        @Override
-        public String toSql() {
-            StringBuilder sql = new StringBuilder();
-            addQueryBase(sql);
-            addFrom(sql);
-            addWhere(sql);
-            return sql.toString();
-        }
-
+        
         @Override
         public Integer execute() {
             DeleteQueryData param = newDeleteQueryData();
@@ -59,14 +49,8 @@ public final class Delete implements Sqlable {
 
         private DeleteQueryData newDeleteQueryData() {
             DeleteQueryData param = new DeleteQueryData();
-            StringBuilder sql = new StringBuilder();
-            sql.append(MonoTalk.getTableName(mType)).append(" ");
-            if (mAlias != null) {
-                sql.append("AS ");
-                sql.append(mAlias);
-                sql.append(" ");
-            }
-            param.setTableName(sql.toString());
+            param.setTableName(MonoTalk.getTableName(mType));
+            param.setTableAlias(mAlias);
             param.setSelectionArgs(selection.getSelectionArgs());
             param.setWhere(selection.getSelection());
             return param;

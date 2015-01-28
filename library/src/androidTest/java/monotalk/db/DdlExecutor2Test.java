@@ -2,7 +2,6 @@ package monotalk.db;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
-import android.database.sqlite.SQLiteDatabase;
 
 import org.junit.After;
 import org.junit.Rule;
@@ -45,8 +44,6 @@ public class DdlExecutor2Test {
             Robolectric.shadowOf(contentResolver);
             ShadowContentResolver.registerProvider("monotalk.db", contentProvider);
             contentProvider.onCreate();
-            SQLiteDatabase db = MonoTalk.getDbHelperByDefaultDbName().getWritableDatabase();
-            MonoTalk.getDbHelperByDefaultDbName().onUpgrade(db, 0, 0);
             fail("ここには到達しないはず");
         } catch (RuntimeException e) {
             if (!(e instanceof IllegalAnnotationStateException)) {

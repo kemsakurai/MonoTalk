@@ -38,7 +38,7 @@ public class DeleteOperationBuilder<T extends Entity> extends AbstractSelection 
         builder = newBuilder(uri);
     }
 
-    public DeleteOperationBuilder withYieldAllowed(boolean yieldAllowed) {
+    public DeleteOperationBuilder yieldAllowed(boolean yieldAllowed) {
         builder.withYieldAllowed(yieldAllowed);
         return this;
     }
@@ -88,6 +88,11 @@ public class DeleteOperationBuilder<T extends Entity> extends AbstractSelection 
         return builder.build();
     }
 
+    public DeleteOperationBuilder selectionBackReference(int selectionArgIndex, int previousResult) {
+        builder.withSelectionBackReference(selectionArgIndex, previousResult);
+        return this;
+    }
+
     @Override
     protected void addSelection(String string) {
         selection.addSelection(string);
@@ -96,10 +101,5 @@ public class DeleteOperationBuilder<T extends Entity> extends AbstractSelection 
     @Override
     protected void addArguments(Object... args) {
         selection.addArguments(args);
-    }
-
-    public DeleteOperationBuilder withSelectionBackReference(int selectionArgIndex, int previousResult) {
-        builder.withSelectionBackReference(selectionArgIndex, previousResult);
-        return this;
     }
 }

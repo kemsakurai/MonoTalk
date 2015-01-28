@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (C) 2012-2013 Kem
+ * Copyright (C) 2013-2015 Kem
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -207,16 +207,12 @@ public class DdlExecutor {
         if (column != null) {
             Class<?> type = field.getType();
             @SuppressWarnings("rawtypes")
-            TypeConverter typeConverter = TypeConverterCache.getTypeConverter(type);
+            TypeConverter typeConverter = TypeConverterCache.getTypeConverterOrThrow(type);
             String columnName = column.name();
             columnDef.append(columnName);
             columnDef.append(" ");
             if (typeConverter != null) {
                 columnDef.append(typeConverter.getSqlType());
-            } else {
-                if (ReflectUtils.isEntity(type)) {
-                    columnDef.append(TypeConverter.SQLiteType.INTEGER);
-                }
             }
             columnDef.append(" ");
 

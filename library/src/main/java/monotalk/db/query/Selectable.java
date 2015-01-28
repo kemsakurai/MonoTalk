@@ -6,6 +6,8 @@ import android.support.v4.content.CursorLoader;
 import java.util.List;
 
 import monotalk.db.Entity;
+import monotalk.db.LazyList;
+import monotalk.db.rowmapper.RowListMapper;
 import monotalk.db.rowmapper.RowMapper;
 
 /*
@@ -28,9 +30,11 @@ public interface Selectable {
 
     public <T extends Entity> List<T> selectList();
 
+    public <T extends Entity> LazyList<T> selectLazyList();
+
     public <T extends Object> T selectOne(RowMapper<T> mapper);
 
-    public <T extends Object> List<T> selectList(RowMapper<T> mapper);
+    public <T extends Object> List<T> selectList(RowListMapper<T> mapper);
 
     public <T extends Object> T selectScalar(Class<T> clazz);
 

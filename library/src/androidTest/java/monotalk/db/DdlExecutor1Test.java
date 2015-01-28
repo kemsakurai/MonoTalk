@@ -2,8 +2,6 @@ package monotalk.db;
 
 import android.content.ContentProvider;
 import android.content.ContentResolver;
-import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteOpenHelper;
 
 import org.junit.After;
 import org.junit.Before;
@@ -14,10 +12,8 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowContentResolver;
-import org.robolectric.shadows.ShadowLog;
 
 import monotalk.db.manager.EntityManager;
-import monotalk.db.manager.EntityManagerType;
 import monotalk.db.rules.LogRule;
 import monotalk.db.shadows.PersistentShadowSQLiteOpenHelper;
 
@@ -36,15 +32,11 @@ public class DdlExecutor1Test {
     @Before
     public void before() {
         ContentProvider contentProvider = new TestContentProvider1();
-        ShadowLog.stream = System.out;
         ContentResolver contentResolver = Robolectric.application.getContentResolver();
         Robolectric.shadowOf(contentResolver);
         ShadowContentResolver.registerProvider("monotalk.db", contentProvider);
         contentProvider.onCreate();
-        SQLiteOpenHelper dbHelper = MonoTalk.getDbHelperByDbName("Sample");
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
-        dbHelper.onUpgrade(db, 0, 0);
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         manager.deleteAll(TestModel3.class);
         manager.deleteAll(TestModel2.class);
         manager.deleteAll(TestModel1.class);
@@ -59,9 +51,9 @@ public class DdlExecutor1Test {
     // ----------------------------------------------------------------
     @Test
     public void columnString1ValueShouldBeDEFAULT() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel3 model31 = new TestModel3();
-        model31.setId(111l);
+        model31.id = 111l;
         model31.columnString1 = null;
         model31.columnString2 = "columnString2";
         model31.columnString3 = "columnString3";
@@ -73,9 +65,9 @@ public class DdlExecutor1Test {
 
     @Test
     public void columnBoolean1ValueShouldBeTrue() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel3 model31 = new TestModel3();
-        model31.setId(111l);
+        model31.id = 111l;
         model31.columnString1 = null;
         model31.columnString2 = "columnString2";
         model31.columnString3 = "columnString3";
@@ -88,9 +80,9 @@ public class DdlExecutor1Test {
 
     @Test
     public void columnBoolean2ValueShouldBeFalse() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel3 model31 = new TestModel3();
-        model31.setId(111l);
+        model31.id = 111l;
         model31.columnString1 = null;
         model31.columnString2 = "columnString2";
         model31.columnString3 = "columnString3";
@@ -103,16 +95,16 @@ public class DdlExecutor1Test {
 
     @Test
     public void columnBoolean3IsUniqueAndIsDefalutValueTrue() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel3 model31 = new TestModel3();
-        model31.setId(111l);
+        model31.id = 111l;
         model31.columnString1 = null;
         model31.columnString2 = "columnString2";
         model31.columnString3 = "columnString3";
         model31.columnBoolean3 = null;
         manager.insertExcludesNull(model31);
 
-        model31.setId(null);
+        model31.id = null;
         model31.columnString1 = null;
         model31.columnString2 = "columnString2";
         model31.columnString3 = "columnString3";
@@ -128,9 +120,9 @@ public class DdlExecutor1Test {
 
     @Test
     public void columnString2CannotInsertNull() {
-        EntityManager manager = MonoTalk.getManagerByDefaultAuth(EntityManagerType.DB_OPEN_HELPER);
+        EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         TestModel3 model31 = new TestModel3();
-        model31.setId(111l);
+        model31.id = 111l;
         model31.columnString1 = null;
         model31.columnString2 = null;
         model31.columnString3 = "columnString3";

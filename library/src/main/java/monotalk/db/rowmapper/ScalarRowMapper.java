@@ -13,8 +13,14 @@ public class ScalarRowMapper<T> implements RowMapper<T> {
     @SuppressWarnings("rawtypes")
     private TypeConverter typeConverter;
 
+    public ScalarRowMapper(Class<T> type) {
+        columnIndex = 0;
+        typeConverter = TypeConverterCache.getTypeConverterOrThrow(type);
+    }
+
     public ScalarRowMapper(Class<T> type, String columnName) {
-        AssertUtils.assertNotEmpty(columnName, "columnName is Empty");
+        AssertUtils.assertNotNull(type, "The type must not be null");
+        AssertUtils.assertNotEmpty(columnName, "The columnName must not be Empty");
         this.columnName = columnName;
         typeConverter = TypeConverterCache.getTypeConverterOrThrow(type);
     }

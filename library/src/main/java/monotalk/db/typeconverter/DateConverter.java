@@ -2,6 +2,7 @@ package monotalk.db.typeconverter;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteProgram;
 
 import java.util.Date;
 
@@ -23,7 +24,7 @@ public class DateConverter extends BaseTypeConverter<Date> {
     }
 
     @Override
-    public String toBindSql(Date object) {
+    public String toStringBindArg(Date object) {
         return String.valueOf(object.getTime());
     }
 
@@ -32,4 +33,8 @@ public class DateConverter extends BaseTypeConverter<Date> {
         return SQLiteType.INTEGER;
     }
 
+    @Override
+    public void bind(SQLiteProgram program, int index, Date value) {
+        program.bindLong(index, value.getTime());
+    }
 }

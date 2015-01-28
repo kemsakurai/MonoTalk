@@ -6,11 +6,13 @@ import android.support.v4.content.CursorLoader;
 import java.util.List;
 
 import monotalk.db.Entity;
+import monotalk.db.LazyList;
 import monotalk.db.querydata.DeleteQueryData;
 import monotalk.db.querydata.InsertQueryData;
 import monotalk.db.querydata.SelectQueryData;
 import monotalk.db.querydata.TwoWayQueryData;
 import monotalk.db.querydata.UpdateQueryData;
+import monotalk.db.rowmapper.RowListMapper;
 import monotalk.db.rowmapper.RowMapper;
 
 /**
@@ -41,6 +43,14 @@ public interface QueryCrudHandler {
      * @return
      */
     public <T extends Entity> List<T> selectList(Class<T> clazz, SelectQueryData data);
+
+    /**
+     * @param clazz
+     * @param data
+     * @param <T>
+     * @return
+     */
+    public <T extends Entity> LazyList<T> selectLazyList(Class<T> clazz, SelectQueryData data);
 
     /**
      * Cursorローダを生成します。
@@ -79,10 +89,9 @@ public interface QueryCrudHandler {
     /**
      * @param mapper
      * @param data
-     * @param <T>
      * @return
      */
-    public <T> List<T> selectList(RowMapper<T> mapper, SelectQueryData data);
+    public <T> List<T> selectList(RowListMapper<T> mapper, SelectQueryData data);
 
     /**
      * @param clazz
@@ -135,10 +144,9 @@ public interface QueryCrudHandler {
     /**
      * @param mapper
      * @param data
-     * @param <E>
      * @return
      */
-    public <E> List<E> selectListBySqlFile(RowMapper<E> mapper, TwoWayQueryData data);
+    public <E> List<E> selectListBySqlFile(RowListMapper<E> mapper, TwoWayQueryData data);
 
     /**
      * @param clazz
@@ -153,4 +161,13 @@ public interface QueryCrudHandler {
      * @return
      */
     public int delete(DeleteQueryData param);
+
+    /**
+     *
+     * @param type
+     * @param data
+     * @param <T>
+     * @return
+     */
+    public <T extends Entity> LazyList<T> selectLazyList(Class<T> type, TwoWayQueryData data);
 }

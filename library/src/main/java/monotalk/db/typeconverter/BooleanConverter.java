@@ -2,6 +2,7 @@ package monotalk.db.typeconverter;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteProgram;
 
 public class BooleanConverter extends BaseTypeConverter<Boolean> {
 
@@ -16,7 +17,7 @@ public class BooleanConverter extends BaseTypeConverter<Boolean> {
     }
 
     @Override
-    public String toBindSql(Boolean object) {
+    public String toStringBindArg(Boolean object) {
         return object ? "1" : "0";
     }
 
@@ -26,7 +27,13 @@ public class BooleanConverter extends BaseTypeConverter<Boolean> {
     }
 
     @Override
+    public void bind(SQLiteProgram program, int index, Boolean value) {
+        program.bindLong(index, Long.parseLong(value ? "1" : "0"));
+    }
+    
+    @Override
     public Boolean unpack(Cursor c, int index) {
         return c.getLong(index) > 0;
     }
 }
+

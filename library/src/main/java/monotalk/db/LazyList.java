@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (C) 2012-2013 Kem
+ * Copyright (C) 2013-2015 Kem
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
-import monotalk.db.utility.ConvertUtils;
+import monotalk.db.rowmapper.EntityRowMapper;
 
 /**
  * @param <T>
@@ -32,10 +32,7 @@ import monotalk.db.utility.ConvertUtils;
  */
 public class LazyList<T extends Entity> implements List<T>, Closeable {
     private final Cursor mCursor;
-    /**
-     * Tableクラス
-     */
-    private final Class<T> element;
+    private final EntityRowMapper rowMapper;
 
     /**
      * コンストラクター
@@ -44,7 +41,7 @@ public class LazyList<T extends Entity> implements List<T>, Closeable {
      */
     public LazyList(Cursor cursor, Class<T> clazz) {
         mCursor = cursor;
-        element = clazz;
+        rowMapper = new EntityRowMapper<T>(clazz);
     }
 
     @Override
@@ -53,125 +50,226 @@ public class LazyList<T extends Entity> implements List<T>, Closeable {
     }
 
     @Override
-    public void add(int location, T object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public boolean add(T object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public boolean addAll(int location, Collection<? extends T> collection) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public boolean addAll(Collection<? extends T> collection) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public void clear() {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public boolean contains(Object object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public boolean containsAll(Collection<?> collection) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public T get(int location) {
-        if (!mCursor.moveToPosition(location)) {
-            throw new IndexOutOfBoundsException("List index out of bounds");
-        }
-        return getItem();
-    }
-
-    @Override
-    public int indexOf(Object object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+    public int size() {
+        return mCursor.isClosed() ? 0 : mCursor.getCount();
     }
 
     @Override
     public boolean isEmpty() {
-        return !mCursor.moveToFirst();
+        return size() == 0;
+    }
+
+    @Override
+    public T get(int location) {
+        if (mCursor.moveToPosition(location)) {
+            T model = (T) rowMapper.mapRow(mCursor);
+            return model;
+        }
+        throw new IndexOutOfBoundsException();
     }
 
     @Override
     public Iterator<T> iterator() {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public int lastIndexOf(Object object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        return listIterator();
     }
 
     @Override
     public ListIterator<T> listIterator() {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        return listIterator(0);
     }
 
     @Override
     public ListIterator<T> listIterator(int location) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        if (isEmpty()) {
+            return new EmptyListIterator<T>();
+        }
+        return new LazyListIterator(location);
+    }
+
+    // Unsupported methods
+
+    @Override
+    public void add(int location, T object) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean add(T object) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean addAll(int location, Collection<? extends T> collection) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean addAll(Collection<? extends T> collection) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void clear() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean contains(Object object) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean containsAll(Collection<?> collection) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int indexOf(Object object) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int lastIndexOf(Object object) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public T remove(int location) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean remove(Object object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean removeAll(Collection<?> collection) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public boolean retainAll(Collection<?> collection) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public T set(int location, T object) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
-    }
-
-    @Override
-    public int size() {
-        return mCursor.getCount();
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public List<T> subList(int start, int end) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+        throw new UnsupportedOperationException();
     }
 
     @Override
-    public <E> E[] toArray(E[] array) {
-        throw new UnsupportedOperationException("This Method is Unsupported!!!");
+    public <T> T[] toArray(T[] array) {
+        throw new UnsupportedOperationException();
     }
 
-    private T getItem() {
-        T model = ConvertUtils.toEntity(element, mCursor, null);
-        return model;
+    private static class EmptyListIterator<T> implements ListIterator<T> {
+        @Override
+        public void add(T object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return false;
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return false;
+        }
+
+        @Override
+        public T next() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int nextIndex() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public T previous() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int previousIndex() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void set(T object) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private class LazyListIterator implements ListIterator<T> {
+        private int index;
+
+        public LazyListIterator(int location) {
+            this.index = location;
+        }
+
+        @Override
+        public void add(T object) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return index < mCursor.getCount();
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return index > 0;
+        }
+
+        @Override
+        public T next() {
+            return get(index++);
+        }
+
+        @Override
+        public int nextIndex() {
+            return index + 1;
+        }
+
+        @Override
+        public T previous() {
+            return get(--index);
+        }
+
+        @Override
+        public int previousIndex() {
+            return index - 1;
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void set(T object) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

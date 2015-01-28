@@ -3,6 +3,7 @@ package monotalk.db.typeconverter;
 import android.annotation.TargetApi;
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteProgram;
 import android.os.Build;
 
 public class ByteArrayConverter extends BaseTypeConverter<byte[]> {
@@ -25,13 +26,18 @@ public class ByteArrayConverter extends BaseTypeConverter<byte[]> {
     }
 
     @Override
-    public String toBindSql(byte[] object) {
+    public String toStringBindArg(byte[] object) {
         return new String(object);
     }
 
     @Override
     public SQLiteType getSqlType() {
         return SQLiteType.BLOB;
+    }
+
+    @Override
+    public void bind(SQLiteProgram program, int index, byte[] value) {
+        program.bindBlob(index, value);
     }
 
 }

@@ -1,88 +1,24 @@
 package monotalk.db.utility;
 
-import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import monotalk.db.DBLog;
 import monotalk.db.Entity;
+import monotalk.db.FieldInfo;
 import monotalk.db.MonoTalk;
 import monotalk.db.compat.DatabaseCompat;
-import monotalk.db.manager.EntityCache;
+import monotalk.db.manager.EntityManager;
+import monotalk.db.rowmapper.EntityRowListMapper;
 import monotalk.db.rowmapper.EntityRowMapper;
 import monotalk.db.rowmapper.RowMapper;
 import monotalk.db.rowmapper.ScalarRowMapper;
-import monotalk.db.typeconverter.TypeConverter;
-import monotalk.db.typeconverter.TypeConverterCache;
 
 public class ConvertUtils {
 
     private static final String TAG_NAME = DBLog.getTag(ConvertUtils.class);
-
-    /**
-     * ContentValuesに値を追加する
-     *
-     * @param fieldName
-     * @param value
-     * @param values
-     */
-    public static void addValue(String fieldName, Object value, ContentValues values) {
-        if (value == null) {
-            values.putNull(fieldName);
-            return;
-        } else {
-            Class<?> fieldType = value.getClass();
-            @SuppressWarnings("rawtypes")
-            final TypeConverter typeConverter = TypeConverterCache.getTypeConverter(fieldType);
-            if (typeConverter != null) {
-                // serialize data
-                typeConverter.pack(value, values, fieldName);
-            } else {
-                // TODO: Find a smarter way to do this? This if block is
-                // necessary because we
-                // can't know the type until runtime.
-                if (fieldType.equals(Byte.class) || fieldType.equals(byte.class)) {
-                    values.put(fieldName, (Byte) value);
-                } else if (fieldType.equals(Short.class) || fieldType.equals(short.class)) {
-                    values.put(fieldName, (Short) value);
-                } else if (fieldType.equals(Integer.class) || fieldType.equals(int.class)) {
-                    values.put(fieldName, (Integer) value);
-                } else if (fieldType.equals(Long.class) || fieldType.equals(long.class)) {
-                    values.put(fieldName, (Long) value);
-                } else if (fieldType.equals(Float.class) || fieldType.equals(float.class)) {
-                    values.put(fieldName, (Float) value);
-                } else if (fieldType.equals(Double.class) || fieldType.equals(double.class)) {
-                    values.put(fieldName, (Double) value);
-                } else if (fieldType.equals(Boolean.class) || fieldType.equals(boolean.class)) {
-                    values.put(fieldName, (Boolean) value);
-                } else if (fieldType.equals(Character.class) || fieldType.equals(char.class)) {
-                    values.put(fieldName, value.toString());
-                } else if (fieldType.equals(String.class)) {
-                    values.put(fieldName, value.toString());
-                } else if (fieldType.equals(Byte[].class) || fieldType.equals(byte[].class)) {
-                    values.put(fieldName, (byte[]) value);
-                } else if (ReflectUtils.isEntity(fieldType)) {
-                    Entity model = (Entity) value;
-                    if (model.getId() == null) {
-                        values.putNull(fieldName);
-                    } else {
-                        long idValue = model.getId();
-                        values.put(fieldName, idValue);
-                    }
-                } else if (ReflectUtils.isSubclassOf(fieldType, Enum.class)) {
-                    values.put(fieldName, ((Enum<?>) value).name());
-                } else {
-                    DBLog.w(TAG_NAME, "fieldType=[ " + fieldType.getName() + "] can not convert...");
-                }
-            }
-        }
-    }
 
     /**
      * <p>
@@ -127,11 +63,11 @@ public class ConvertUtils {
         int count = 0;
         // カラム数分繰り返し
         for (String columnName : columnNames) {
-            Map<Field, String> map = MonoTalk.getTableInfo(entity.getClass()).getColumnNamesMap();
-            for (Entry<Field, String> e : map.entrySet()) {
-                String name = e.getValue();
+            List<FieldInfo> infos = MonoTalk.getTableInfo(entity.getClass()).getFieldInfos();
+            for (FieldInfo info : infos) {
+                String name = info.getColumnName();
                 if (columnName.equals(name)) {
-                    dist[count] = ReflectUtils.readField(e.getKey(), entity, true);
+                    dist[count] = ReflectUtils.readField(info.getField(), entity);
                     break;
                 }
             }
@@ -153,12 +89,12 @@ public class ConvertUtils {
     /**
      * @param clazz
      * @param cursor
-     * @param entityCache
+     * @param entityManager
      * @param <T>
      * @return
      */
-    public static <T extends Entity> T toEntity(Class<T> clazz, Cursor cursor, EntityCache entityCache) {
-        EntityRowMapper<T> mapper = new EntityRowMapper<T>(clazz, entityCache);
+    public static <T extends Entity> T toEntity(Class<T> clazz, Cursor cursor, EntityManager entityManager) {
+        EntityRowMapper<T> mapper = new EntityRowMapper<T>(clazz, entityManager);
         T modelObject = mapper.mapRow(cursor);
         return modelObject;
     }
@@ -176,84 +112,43 @@ public class ConvertUtils {
     /**
      * @param clazz
      * @param cursor
-     * @param entityCache
+     * @param entityManager
      * @return
      */
-    public static <T extends Entity> T toEntityAndClose(Class<T> clazz, Cursor cursor, EntityCache entityCache) {
-        EntityRowMapper<T> mapper = new EntityRowMapper<T>(clazz, entityCache);
+    public static <T extends Entity> T toEntityAndClose(Class<T> clazz, Cursor cursor, EntityManager entityManager) {
         T modelObject = null;
-        try {
-            if (cursor.moveToFirst()) {
-                modelObject = mapper.mapRow(cursor);
-            }
-        } finally {
-            cursor.close();
+        if (cursor.moveToFirst()) {
+            EntityRowMapper<T> mapper = new EntityRowMapper<T>(clazz, entityManager);
+            modelObject = mapper.mapRow(cursor);
         }
+        cursor.close();
         return modelObject;
     }
 
     /**
-     * CursorをBeanListに変換して返す<br>
-     * 変換後にCursorは閉じる
+     * CursorをBeanListに変換して返します。
+     * 変換前にカーソルを1行目に移動させ、変換後にCursorは閉じます。
      *
      * @param clazz  TABLE行クラス
      * @param cursor カーソル
      * @return
      */
     public static <T extends Entity> List<T> toEntityListAndClose(Class<T> clazz, Cursor cursor,
-                                                                  EntityCache entityCache) {
-        EntityRowMapper<T> mapper = new EntityRowMapper<T>(clazz, entityCache);
-        List<T> values = toRowListAndClose(mapper, cursor);
-        entityCache.evictAllEntity();
-        return values;
+                                                                  EntityManager entityManager) {
+        EntityRowListMapper<T> mapper = new EntityRowListMapper<T>(clazz, entityManager);
+        return mapper.mapRowListAndClose(cursor);
     }
 
     /**
      * カーソル1行をオブジェクトにMapする
      */
     public static <T> T toRowAndClose(RowMapper<T> rowMapper, Cursor cursor) {
-        try {
-            if (cursor.moveToFirst()) {
-                // カーソルのデータの件数が0であれば、そのままNullを返却する
-                return rowMapper.mapRow(cursor);
-            }
-        } finally {
-            cursor.close();
+        T result = null;
+        if (cursor.moveToNext()) {
+            result = rowMapper.mapRow(cursor);
         }
-        return null;
-    }
-
-    /**
-     * カーソルをオブジェクトにMapする
-     */
-    public static <T> List<T> toRowList(RowMapper<T> rowMapper, Cursor cursor) {
-        // 戻り値のリストを確保
-        List<T> list = new ArrayList<T>(cursor.getCount());
-        try {
-            if (cursor.moveToFirst()) {
-                do {
-                    list.add(rowMapper.mapRow(cursor));
-                } while (cursor.moveToNext());
-            }
-        } catch (IllegalStateException e) {
-            // REMENBER エラー発生時は、エラーは通知しない。
-            DBLog.w(TAG_NAME, "Raise IllegalStateException errorMessage [" + e.getMessage() + "]");
-            // 設定できたデータを返却する
-        }
-        return list;
-    }
-
-    /**
-     * カーソルをオブジェクトにMapする
-     */
-    public static <T> List<T> toRowListAndClose(RowMapper<T> rowMapper, Cursor cursor) {
-        List<T> list = null;
-        try {
-            list = toRowList(rowMapper, cursor);
-        } finally {
-            cursor.close();
-        }
-        return list;
+        cursor.close();
+        return result;
     }
 
     public static <T> T toScalar(Class<T> clazz, Cursor cursor) {

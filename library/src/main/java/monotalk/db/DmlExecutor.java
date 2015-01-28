@@ -1,421 +1,607 @@
-/*******************************************************************************
- * Copyright (C) 2012-2013 Kem
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- ******************************************************************************/
 package monotalk.db;
 
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.DatabaseUtils;
 import android.database.sqlite.SQLiteDatabase;
-import android.database.sqlite.SQLiteQueryBuilder;
+import android.database.sqlite.SQLiteStatement;
+
+import org.seasar.dbflute.cbean.SimpleMapPmb;
+import org.seasar.dbflute.twowaysql.context.CommandContext;
+import org.seasar.dbflute.twowaysql.context.CommandContextCreator;
+import org.seasar.dbflute.twowaysql.node.Node;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
-import monotalk.db.DBLog.LogLevel;
 import monotalk.db.compat.DatabaseCompat;
 import monotalk.db.query.QueryUtils;
 
+import static monotalk.db.TransactionManager.AbstractModifyStatementExecuter;
+import static monotalk.db.TransactionManager.AbstractSelectStatementExecuter;
+import static monotalk.db.TransactionManager.ModifyExecuteLister;
+import static monotalk.db.TransactionManager.SelectExecuteLister;
+
+/**
+ * Created by Kem on 2015/01/11.
+ */
 public class DmlExecutor {
-
     private final static String TAG_NAME = DBLog.getTag(DmlExecutor.class);
-
-    private SQLiteDatabase db = null;
+    /**
+     * DatabaseInfo
+     */
+    private DatabaseConnectionSource databaseConnectionSource = null;
+    /**
+     * SQLiteOpenHelper クラス
+     */
+    private DatabaseOpenHelper dbHelper = null;
 
     /**
-     * コンストラクター
+     * Constructor
      *
-     * @param db SQLiteDatabase
+     * @param databaseConnectionSource
      */
-    public DmlExecutor(SQLiteDatabase db) {
-        this.db = db;
+    public DmlExecutor(DatabaseConnectionSource databaseConnectionSource) {
+        this.databaseConnectionSource = databaseConnectionSource;
+        dbHelper = databaseConnectionSource.getDbHelper();
     }
 
     /**
-     * データを削除する
-     *
-     * @param tableName
+     * @param clazz
      * @param whereClause
+     * @param listener
      * @param whereArgs
      * @return
      */
-    public int executeDelete(String tableName, String whereClause, Object[] whereArgs) {
-        String[] stringArrayArgs = QueryUtils.toStirngArrayArgs(whereArgs);
-        return executeDeleteByWhereArrayStringArgs(tableName, whereClause, stringArrayArgs);
+    public int deleteByWhereArrayStringArgs(Class<? extends Entity> clazz, final String whereClause, ModifyExecuteLister listener,
+                                            final String... whereArgs) {
+        String tableName = MonoTalk.getTableName(clazz);
+        return deleteByWhereArrayStringArgs(tableName, whereClause, listener, whereArgs);
     }
 
     /**
-     * データを削除する
-     *
-     * @param tableName
+     * @param table
      * @param whereClause
+     * @param listener
      * @param whereArgs
      * @return
      */
-    public <T extends Entity> int executeDeleteByWhereArrayStringArgs(String tableName, String whereClause, String[] whereArgs) {
-        int updateCount = -1;
-        try {
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                notifyStartParameterDebug();
-                DBLog.d(TAG_NAME, "tableName=" + tableName);
-                DBLog.d(TAG_NAME, "whereClause=" + whereClause);
-                DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(whereArgs));
-                notifyEndParameterDebug();
+    public int deleteByWhereArrayStringArgs(final String table, final String whereClause, ModifyExecuteLister listener,
+                                            final String... whereArgs) {
+        // 更新件数
+        int updateCount;
+        updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                int updateCount1 = -1;
+                try {
+                    if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                        notifyStartParameterDebug("delete");
+                        DBLog.d(TAG_NAME, "tableName=" + table);
+                        DBLog.d(TAG_NAME, "whereClause=" + whereClause);
+                        DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(whereArgs));
+                        notifyEndParameterDebug();
+                    }
+                    updateCount1 = db.delete(table, whereClause, whereArgs);
+                } catch (RuntimeException e) {
+                    ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
+                    builder.setTableName(table).setSelection(whereClause).setSelectionArgs(whereArgs);
+                    // エラーログ出力
+                    DBLog.e(TAG_NAME, "Raise RuntimeException" + builder.buildMsg());
+                    throw e;
+                }
+                return (Integer) updateCount1;
             }
-            updateCount = db.delete(tableName, whereClause, whereArgs);
-        } catch (RuntimeException e) {
-            ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
-            builder.setTableName(tableName).setSelection(whereClause).setSelectionArgs(whereArgs);
-            // エラーログ出力
-            DBLog.e(TAG_NAME, "Raise RuntimeException" + builder.buildMsg());
-            throw e;
-        }
+        }.execute();
+        // 更新件数を返す
         return updateCount;
     }
 
-    /**
-     * データを登録する
-     *
-     * @param tableName
-     * @param data
-     * @return
-     */
-    public long executeInsert(String tableName, ContentValues data) {
-        long id;
-        try {
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                notifyStartParameterDebug();
-                DBLog.d(TAG_NAME, "tableName=" + tableName);
-                DBLog.d(TAG_NAME, "data=" + data.toString());
-                notifyEndParameterDebug();
-            }
-            id = (int) db.insertOrThrow(tableName, null, data);
-        } catch (RuntimeException e) {
-            ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
-            builder.setTableName(tableName).setValues(data);
-            DBLog.e(TAG_NAME, "Raise SQLiteException " + builder.buildMsg());
-            throw e;
-        }
-        return id;
-    }
-
-    /**
-     * Cursorを返す
-     *
-     * @param distinct
-     * @param tableName
-     * @param projection
-     * @param selection
-     * @param groupBy
-     * @param having
-     * @param sortOrder
-     * @param limit
-     * @param selectionArgs
-     * @return
-     */
-    public Cursor executeSelectCursorByWhereArrayStringArgs(boolean distinct, final String tableName, final String[] projection,
-                                                            final String selection, final String groupBy, final String having, final String sortOrder,
-                                                            final String limit, final String[] selectionArgs) {
-        Cursor cursor;
-        try {
-            SQLiteQueryBuilder builder = new SQLiteQueryBuilder();
-            builder.setDistinct(distinct);
-            builder.setTables(tableName);
-            String sql = DatabaseCompat.buildQuery(builder, projection, selection, groupBy, having, sortOrder, limit);
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                notifyStartParameterDebug();
-                DBLog.d(TAG_NAME, "sql=" + sql);
-                DBLog.d(TAG_NAME, "selectionArgs=" + Arrays.toString(selectionArgs));
-                notifyEndParameterDebug();
-            }
-            cursor = db.rawQuery(sql, selectionArgs);
-
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                DBLog.d(TAG_NAME, cursor);
-            }
-
-        } catch (RuntimeException e) {
-            SelectStatementErrorMsgBuilder builder = new SelectStatementErrorMsgBuilder();
-            builder
-                    .setTableName(tableName)
-                    .setProjection(projection)
-                    .setSelection(selection)
-                    .setGroupBy(groupBy)
-                    .setHaving(having)
-                    .setSortOrder(sortOrder)
-                    .setLimit(limit)
-                    .setSelectionArgs(selectionArgs);
-            DBLog.e(TAG_NAME, "Raise SQLiteException " + builder.buildMsg());
-            throw e;
-        }
-        return cursor;
-    }
-
-    /**
-     * Cursorを返す
-     *
-     * @param distinct
-     * @param tableName
-     * @param projection
-     * @param selection
-     * @param groupBy
-     * @param having
-     * @param sortOrder
-     * @param limit
-     * @param selectionArgs
-     * @return
-     */
-    public Cursor executeSelectCursor(boolean distinct, final String tableName, final String[] projection,
-                                      final String selection, final String groupBy, final String having, final String sortOrder,
-                                      final String limit, final Object[] selectionArgs) {
-        String[] stringArrayArgs = QueryUtils.toStirngArrayArgs(selectionArgs);
-        return executeSelectCursorByWhereArrayStringArgs(distinct, tableName, projection, selection, groupBy, having, sortOrder, limit, stringArrayArgs);
-    }
-
-    private void notifyStartParameterDebug() {
-        DBLog.d(TAG_NAME, "DEBUG method Parameters >>>>>>>>>>>>>>>>>>>>>>>>");
-    }
-
-    /**
-     * SQLを元にクエリを実行する
-     *
-     * @param sql
-     * @param selectionArgs
-     * @return
-     */
-    public Cursor executeSelectCursor(String sql, Object[] selectionArgs) {
-        Cursor cursor;
-        String[] stringArrayArgs = QueryUtils.toStirngArrayArgs(selectionArgs);
-        try {
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                notifyStartParameterDebug();
-                DBLog.d(TAG_NAME, "sql=" + sql);
-                DBLog.d(TAG_NAME, "selectionArgs=" + Arrays.toString(stringArrayArgs));
-                notifyEndParameterDebug();
-            }
-            cursor = db.rawQuery(sql, stringArrayArgs);
-
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                DBLog.d(TAG_NAME, cursor);
-            }
-
-        } catch (RuntimeException e) {
-            SelectStatementErrorMsgBuilder builder = new SelectStatementErrorMsgBuilder();
-            builder.setSql(sql).setSelectionArgs(stringArrayArgs);
-            DBLog.e(TAG_NAME, "Raise SQLiteException " + builder.buildMsg());
-            throw e;
-        }
-        return cursor;
-    }
-
-    /**
-     * データを更新する
-     *
-     * @param tableName
-     * @param data
-     * @param whereClause
-     * @param whereArgs
-     * @return
-     */
-    public <T extends Entity> int executeUpdateByWhereArrayStringArgs(String tableName, ContentValues data, String whereClause,
-                                                                      String[] whereArgs) {
-        // Tableアノテーションを取得
-        int updateCount = -1;
-        try {
-            if (DBLog.isLoggable(LogLevel.DEBUG)) {
-                notifyStartParameterDebug();
-                DBLog.d(TAG_NAME, "tableName=" + tableName);
-                DBLog.d(TAG_NAME, "data=" + data);
-                DBLog.d(TAG_NAME, "whereClause=" + whereClause);
-                DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(whereArgs));
-                notifyEndParameterDebug();
-            }
-            updateCount = db.update(tableName, data, whereClause, whereArgs);
-        } catch (RuntimeException e) {
-            ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
-            builder.setTableName(tableName).setValues(data).setSelection(whereClause).setSelectionArgs(whereArgs);
-            DBLog.e(TAG_NAME, "Raise RuntimeException " + builder.buildMsg());
-            throw e;
-        }
-        return updateCount;
-    }
-
-    /**
-     * データを更新する
-     *
-     * @param tableName
-     * @param data
-     * @param whereClause
-     * @param whereArgs
-     * @return
-     */
-    public <T extends Entity> int executeUpdate(String tableName, ContentValues data, String whereClause,
-                                                Object[] whereArgs) {
-        String[] stringArrayArgs = QueryUtils.toStirngArrayArgs(whereArgs);
-        return executeUpdateByWhereArrayStringArgs(tableName, data, whereClause, stringArrayArgs);
+    private void notifyStartParameterDebug(String methodName) {
+        DBLog.d(TAG_NAME, "DEBUG method [" + methodName + "] Parameters >>>>>>>>>>>>>>>>>>>>>>>>");
     }
 
     private void notifyEndParameterDebug() {
         DBLog.d(TAG_NAME, "DEBUG method Parameters <<<<<<<<<<<<<<<<<<<<<<<<");
     }
 
-    // ========================================================================
-    // Builder Class
-    // ========================================================================
-    private static class ModifyStatementErrorMsgBuilder {
-
-        private String selection = null;
-        private String[] selectionArgs = null;
-        private String sql = null;
-        private String tableName = null;
-        private ContentValues values = null;
-
-        public ModifyStatementErrorMsgBuilder setSelection(String selection) {
-            this.selection = selection;
-            return this;
-        }
-
-        public ModifyStatementErrorMsgBuilder setSelectionArgs(String[] selectionArgs) {
-            this.selectionArgs = selectionArgs;
-            return this;
-        }
-
-        public ModifyStatementErrorMsgBuilder setSql(String sql) {
-            this.sql = sql;
-            return this;
-        }
-
-        public ModifyStatementErrorMsgBuilder setTableName(String tableName) {
-            this.tableName = tableName;
-            return this;
-        }
-
-        public ModifyStatementErrorMsgBuilder setValues(ContentValues values) {
-            this.values = values;
-            return this;
-        }
-
-        public String buildMsg() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("ModifyStatementErrorMsgBuilder [");
-            if (selection != null) {
-                builder.append("selection=").append(selection).append(", ");
+    /**
+     * @param tableName
+     * @param data
+     * @param listener
+     * @return
+     */
+    public long insert(final String tableName, final ContentValues data, ModifyExecuteLister listener) {
+        long id;
+        id = new AbstractModifyStatementExecuter<Long>(dbHelper, listener) {
+            @Override
+            public Long doInTransaction(SQLiteDatabase db) {
+                long id1;
+                try {
+                    if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                        notifyStartParameterDebug("executeInsertOrThrow");
+                        DBLog.d(TAG_NAME, "tableName=" + tableName);
+                        DBLog.d(TAG_NAME, "data=" + data.toString());
+                        notifyEndParameterDebug();
+                    }
+                    id1 = (int) db.insertOrThrow(tableName, null, data);
+                } catch (RuntimeException e) {
+                    ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
+                    builder.setTableName(tableName).setValues(data);
+                    DBLog.e(TAG_NAME, "Raise SQLiteException " + builder.buildMsg());
+                    throw e;
+                }
+                return id1;
             }
-            if (selectionArgs != null) {
-                builder.append("selectionArgs=").append(Arrays.toString(selectionArgs)).append(", ");
-            }
-            if (sql != null) {
-                builder.append("sql=").append(sql).append(", ");
-            }
-            if (tableName != null) {
-                builder.append("tableName=").append(tableName).append(", ");
-            }
-            if (values != null) {
-                builder.append("values=").append(values);
-            }
-            builder.append("]");
-            return builder.toString();
-        }
+        }.execute();
+        return id;
     }
 
-    // ========================================================================
-    // Builder Class
-    // ========================================================================
-    private static class SelectStatementErrorMsgBuilder {
-        private String groupBy = null;
-        private String having = null;
-        private String limit = null;
-        private String[] projection = null;
-        private String selection = null;
-        private String[] selectionArgs = null;
-        private String sortOrder = null;
-        private String sql = null;
-        private String tableName = null;
+    /**
+     * @param clazz
+     * @param values
+     * @param selection
+     * @param listener
+     * @param selectionArgs
+     * @return
+     */
+    public int updateByWhereArrayStringArgs(Class<? extends Entity> clazz, final ContentValues values, final String selection, ModifyExecuteLister listener, final String... selectionArgs) {
+        String tableName = MonoTalk.getTableName(clazz);
+        return updateByWhereArrayStringArgs(tableName, values, selection, listener, selectionArgs);
+    }
 
-        public String buildMsg() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("SelectStatementErrorMsgBuilder [");
-            if (groupBy != null) {
-                builder.append("groupBy=").append(groupBy).append(", ");
+    /**
+     * @param tableName
+     * @param values
+     * @param selection
+     * @param listener
+     * @param selectionArgs
+     * @return
+     */
+    public int updateByWhereArrayStringArgs(final String tableName, final ContentValues values, final String selection, ModifyExecuteLister listener, final String... selectionArgs) {
+        int updateCount = 0;
+        updateCount = (int) new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                // Tableアノテーションを取得
+                int updateCount1 = -1;
+                try {
+                    if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                        notifyStartParameterDebug("executeUpdate");
+                        DBLog.d(TAG_NAME, "tableName=" + tableName);
+                        DBLog.d(TAG_NAME, "data=" + values);
+                        DBLog.d(TAG_NAME, "whereClause=" + selection);
+                        DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(selectionArgs));
+                        notifyEndParameterDebug();
+                    }
+                    updateCount1 = db.update(tableName, values, selection, selectionArgs);
+                } catch (RuntimeException e) {
+                    ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
+                    builder.setTableName(tableName).setValues(values).setSelection(selection).setSelectionArgs(selectionArgs);
+                    DBLog.e(TAG_NAME, "Raise RuntimeException " + builder.buildMsg());
+                    throw e;
+                }
+                return (Integer) updateCount1;
             }
-            if (having != null) {
-                builder.append("having=").append(having).append(", ");
+        }.execute();
+        return updateCount;
+    }
+
+    /**
+     * @param tableName
+     * @param values
+     * @param selection
+     * @param listener
+     * @param selectionArgs
+     * @return
+     */
+    public int update(final String tableName, final ContentValues values, final String selection, ModifyExecuteLister listener, final Object... selectionArgs) {
+        int updateCount = 0;
+        updateCount = (int) new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                // Tableアノテーションを取得
+                int updateCount1 = -1;
+                try {
+                    if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                        notifyStartParameterDebug("executeUpdate");
+                        DBLog.d(TAG_NAME, "tableName=" + tableName);
+                        DBLog.d(TAG_NAME, "data=" + values);
+                        DBLog.d(TAG_NAME, "whereClause=" + selection);
+                        DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(selectionArgs));
+                        notifyEndParameterDebug();
+                    }
+                    int size = values.size();
+                    String[] columnNames = new String[size];
+                    int index = 0;
+                    for (Map.Entry<String, Object> entry : values.valueSet()) {
+                        columnNames[index] = entry.getKey();
+                        index++;
+                    }
+                    String updateSql = QueryUtils.toUpdateSql(tableName, columnNames, selection);
+                    SQLiteStatement statement = db.compileStatement(updateSql);
+                    int bindIndex = 1;
+                    for (String columnName : columnNames) {
+                        DatabaseUtils.bindObjectToProgram(statement, bindIndex, values.get(columnName));
+                        bindIndex++;
+                    }
+                    for (Object arg : selectionArgs) {
+                        DatabaseUtils.bindObjectToProgram(statement, bindIndex, arg);
+                        bindIndex++;
+                    }
+                    updateCount1 = DatabaseCompat.executeUpdateDelete(db, statement);
+
+                } catch (RuntimeException e) {
+                    ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
+                    builder.setTableName(tableName).setValues(values).setSelection(selection).setSelectionArgs(selectionArgs);
+                    DBLog.e(TAG_NAME, "Raise RuntimeException " + builder.buildMsg());
+                    throw e;
+                }
+                return (Integer) updateCount1;
             }
-            if (limit != null) {
-                builder.append("limit=").append(limit).append(", ");
+        }.execute();
+        return updateCount;
+    }
+
+    /**
+     * 指定されたSQLを実行しデータを取得する
+     *
+     * @param sqlFilePath
+     * @param mapPmb
+     * @return
+     */
+    public Cursor selectCursorBySqlFile(final String sqlFilePath, final SimpleMapPmb<Object> mapPmb) {
+        return selectCursorBySqlFile(sqlFilePath, mapPmb);
+    }
+
+    /**
+     * 指定されたSQLを実行しデータを取得する
+     *
+     * @param sqlFilePath
+     * @param mapPmb
+     * @param listener
+     * @return
+     */
+    public Cursor selectCursorBySqlFile(final String sqlFilePath, final SimpleMapPmb<Object> mapPmb,
+                                        SelectExecuteLister listener) {
+        // Node create
+        Node node = databaseConnectionSource.getNode(sqlFilePath);
+        final CommandContext context;
+        if (mapPmb != null && !mapPmb.isEmpty()) {
+            context = createCommandContext(mapPmb);
+        } else {
+            context = createCommandContext(null, null, null);
+        }
+        node.accept(context);
+
+        // Cast selectionArgs to Strings
+        final Object[] args = context.getBindVariables();
+        Cursor cursor = null;
+        try {
+            if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                notifyStartParameterDebug("selectCursorBySqlFile");
+                DBLog.d(TAG_NAME, "sqlFilePath=" + sqlFilePath);
+                DBLog.d(TAG_NAME, "sql=" + context.getSql());
+                DBLog.d(TAG_NAME, "args=" + Arrays.toString(args));
+                notifyEndParameterDebug();
             }
-            if (projection != null) {
-                builder.append("projection=").append(Arrays.toString(projection)).append(", ");
+            cursor = new AbstractSelectStatementExecuter(dbHelper, listener) {
+                @Override
+                protected Cursor doInTransaction(SQLiteDatabase statement) {
+                    String[] strginArgs = QueryUtils.toStirngArrayArgs(args);
+                    Cursor cursor = statement.rawQuery(context.getSql(), strginArgs);
+                    return cursor;
+                }
+            }.execute();
+        } catch (RuntimeException e) {
+            SelectStatementErrorMsgBuilder builder = new SelectStatementErrorMsgBuilder();
+            builder.setSql(context.getSql());
+            builder.setSelectionArgs(QueryUtils.toStirngArrayArgs(args));
+            // エラーログ出力
+            DBLog.e(TAG_NAME, "Raise RuntimeException" + builder.buildMsg());
+            throw e;
+        }
+        return cursor;
+    }
+
+    private CommandContext createCommandContext(Object pmb) {
+        return createCommandContext(new Object[]{pmb}, new String[]{"pmb"}, new Class<?>[]{pmb.getClass()});
+    }
+
+    private CommandContext createCommandContext(Object[] args, String[] argNames, Class<?>[] argTypes) {
+        return new CommandContextCreator(argNames, argTypes).createCommandContext(args);
+    }
+
+    /**
+     * Idをキーにデータを削除する
+     *
+     * @param entity
+     * @param id
+     * @param listener
+     * @return
+     */
+    public int deleteById(Class<? extends Entity> entity, final long id, ModifyExecuteLister listener) {
+        final TableStatement.TableDeleteStatement deleteStatement =
+                databaseConnectionSource.getTableDeleteStatement(entity);
+        // 更新件数
+        int updateCount;
+        updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                return deleteStatement.executeDelete(id);
             }
-            if (selection != null) {
-                builder.append("selection=").append(selection).append(", ");
+        }.execute();
+        // 更新件数を返す
+        return updateCount;
+    }
+
+    /**
+     * @param clazz
+     * @param values
+     * @param listener
+     * @return
+     */
+    public long insert(Class<? extends Entity> clazz, final ContentValues values, ModifyExecuteLister listener) {
+        final TableStatement.TableInsertStatement insertStatement = databaseConnectionSource.getTableInsertStatement(clazz);
+        long id = new AbstractModifyStatementExecuter<Long>(dbHelper, listener) {
+            @Override
+            public Long doInTransaction(SQLiteDatabase db) {
+                return insertStatement.executeInsert(values);
             }
-            if (selectionArgs != null) {
-                builder.append("selectionArgs=").append(Arrays.toString(selectionArgs)).append(", ");
+        }.execute();
+        return id;
+    }
+
+    /**
+     * @param clazz
+     * @param id
+     * @return
+     */
+    public Cursor selectCursorById(Class<? extends Entity> clazz, final long id, SelectExecuteLister listener) {
+        final TableStatement.TableSelectStatement selectStatement = databaseConnectionSource.getTableSelectStatement(clazz);
+        Cursor cursor = new AbstractSelectStatementExecuter(dbHelper, listener) {
+            @Override
+            protected Cursor doInTransaction(SQLiteDatabase db) {
+                return selectStatement.rawQery(id);
             }
-            if (sortOrder != null) {
-                builder.append("sortOrder=").append(sortOrder).append(", ");
+        }.execute();
+        return cursor;
+
+    }
+
+    public int updateById(Class<? extends Entity> clazz, final ContentValues values, final long id, ModifyExecuteLister listener) {
+        final TableStatement.TableUpdateStatement updateStatement = databaseConnectionSource.getTableUpdateStatement(clazz);
+        int updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                return updateStatement.executeUpdate(values, id);
             }
-            if (sql != null) {
-                builder.append("sql=").append(sql).append(", ");
+        }.execute();
+        return updateCount;
+    }
+
+    /**
+     * 一括登録する
+     *
+     * @param clazz
+     * @param values
+     * @param listener
+     * @return 更新件数
+     */
+    public int bulkInsert(final Class<? extends Entity> clazz, final ContentValues[] values, final ModifyExecuteLister listener) {
+        int updateCount;
+        final TableStatement.TableInsertStatement insertStatement = databaseConnectionSource.getTableInsertStatement(clazz);
+        updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                int numValues = 0;
+                for (ContentValues data : values) {
+                    insertStatement.executeInsert(data);
+                    numValues++;
+                }
+                return numValues;
             }
-            if (tableName != null) {
-                builder.append("tableName=").append(tableName);
+        }.execute();
+        return updateCount;
+    }
+
+    /**
+     * データを削除する
+     *
+     * @param tableName
+     * @param whereClause
+     * @param whereArgs
+     * @return
+     */
+    public int delete(String tableName, String whereClause, Object... whereArgs) {
+        return delete(tableName, whereClause, null, whereArgs);
+    }
+
+    /**
+     * @param table
+     * @param whereClause
+     * @param listener
+     * @param whereArgs
+     * @return
+     */
+    public int delete(final String table, final String whereClause, ModifyExecuteLister listener,
+                      final Object... whereArgs) {
+        // 更新件数
+        int updateCount;
+        updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+            @Override
+            public Integer doInTransaction(SQLiteDatabase db) {
+                int updateCount1 = -1;
+                try {
+                    if (DBLog.isLoggable(DBLog.LogLevel.DEBUG)) {
+                        notifyStartParameterDebug("delete");
+                        DBLog.d(TAG_NAME, "tableName=" + table);
+                        DBLog.d(TAG_NAME, "whereClause=" + whereClause);
+                        DBLog.d(TAG_NAME, "whereArgs=" + Arrays.toString(whereArgs));
+                        notifyEndParameterDebug();
+                    }
+                    String deleteSql = QueryUtils.toDeleteSql(table, whereClause);
+                    SQLiteStatement statement = db.compileStatement(deleteSql);
+                    int size = whereArgs.length;
+                    for (int i = 0; i < size; i++) {
+                        DatabaseUtils.bindObjectToProgram(statement, i + 1, whereArgs[i]);
+                    }
+                    updateCount1 = DatabaseCompat.executeUpdateDelete(db, statement);
+                } catch (RuntimeException e) {
+                    ModifyStatementErrorMsgBuilder builder = new ModifyStatementErrorMsgBuilder();
+                    builder.setTableName(table).setSelection(whereClause).setSelectionArgs(whereArgs);
+                    // エラーログ出力
+                    DBLog.e(TAG_NAME, "Raise RuntimeException" + builder.buildMsg());
+                    throw e;
+                }
+                return (Integer) updateCount1;
             }
-            builder.append("]");
-            return builder.toString();
-        }
+        }.execute();
+        // 更新件数を返す
+        return updateCount;
+    }
 
-        public SelectStatementErrorMsgBuilder setGroupBy(String groupBy) {
-            this.groupBy = groupBy;
-            return this;
-        }
+    public <T extends Entity> int bulkDelete(List<T> entities) {
+        return bulkDelete(entities, null);
+    }
 
-        public SelectStatementErrorMsgBuilder setHaving(String having) {
-            this.having = having;
-            return this;
+    /**
+     * 一括削除する
+     *
+     * @param entities entityのList
+     * @param listener 更新系Listener
+     * @param <T>
+     * @return 更新件数
+     */
+    public <T extends Entity> int bulkDelete(final List<T> entities, final ModifyExecuteLister listener) {
+        int updateCount = 0;
+        if (!entities.isEmpty()) {
+            final Class<T> type = (Class<T>) entities.get(0).getClass();
+            final TableStatement.TableDeleteStatement deleteStatement =
+                    databaseConnectionSource.getTableDeleteStatement(type);
+            updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+                @Override
+                public Integer doInTransaction(SQLiteDatabase sqLiteDatabase) {
+                    int numValues = 0;
+                    for (T entity : entities) {
+                        numValues += deleteStatement.executeDelete(entity);
+                    }
+                    return numValues;
+                }
+            }.execute();
         }
+        return updateCount;
+    }
 
-        public SelectStatementErrorMsgBuilder setLimit(String limit) {
-            this.limit = limit;
-            return this;
-        }
+    /**
+     * データを更新します
+     *
+     * @param tableName     Table名
+     * @param data          ContentValues
+     * @param selection     Where句
+     * @param selectionArgs Bindパラメータ
+     * @return
+     */
+    public int update(String tableName, ContentValues data, String selection, Object[] selectionArgs) {
+        return update(tableName, data, selection, null, selectionArgs);
+    }
 
-        public SelectStatementErrorMsgBuilder setProjection(String[] projection) {
-            this.projection = projection;
-            return this;
-        }
+    /**
+     * 一括登録する
+     *
+     * @param entities
+     * @param <T>
+     * @return
+     */
+    public <T extends Entity> int bulkInsert(List<T> entities) {
+        return bulkInsert(entities, null);
+    }
 
-        public SelectStatementErrorMsgBuilder setSelection(String selection) {
-            this.selection = selection;
-            return this;
+    /**
+     * 一括登録する
+     *
+     * @param entities
+     * @param listener
+     * @return
+     */
+    public int bulkInsert(final List<? extends Entity> entities, final TransactionManager.ModifyExecuteLister listener) {
+        int updateCount = 0;
+        if (!entities.isEmpty()) {
+            Class<? extends Entity> type = (Class<? extends Entity>) entities.get(0).getClass();
+            final TableStatement.TableInsertStatement tableInsertStatement = databaseConnectionSource.getTableInsertStatement(type);
+            updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+                @Override
+                public Integer doInTransaction(SQLiteDatabase db) {
+                    int numValues = 0;
+                    for (Entity entity : entities) {
+                        tableInsertStatement.executeInsert(entity);
+                        numValues++;
+                    }
+                    return numValues;
+                }
+            }.execute();
         }
+        return updateCount;
+    }
 
-        public SelectStatementErrorMsgBuilder setSelectionArgs(String[] selectionArgs) {
-            this.selectionArgs = selectionArgs;
-            return this;
-        }
+    /**
+     * 一括更新する
+     *
+     * @param entities
+     * @param <T>
+     * @return
+     */
+    public <T extends Entity> int bulkUpdate(List<T> entities) {
+        return bulkUpdate(entities, null);
+    }
 
-        public SelectStatementErrorMsgBuilder setSortOrder(String sortOrder) {
-            this.sortOrder = sortOrder;
-            return this;
+    /**
+     * 一括更新する
+     *
+     * @param entities entityのList
+     * @param listener 更新系Listener
+     * @param <T>
+     * @return 更新件数
+     */
+    public <T extends Entity> int bulkUpdate(final List<T> entities, final ModifyExecuteLister listener) {
+        int updateCount = 0;
+        if (!entities.isEmpty()) {
+            final Class<T> type = (Class<T>) entities.get(0).getClass();
+            final TableStatement.TableUpdateStatement updateStatement = databaseConnectionSource.getTableUpdateStatement(type);
+            updateCount = new AbstractModifyStatementExecuter<Integer>(dbHelper, listener) {
+                @Override
+                public Integer doInTransaction(SQLiteDatabase sqLiteDatabase) {
+                    int numValues = 0;
+                    for (T entity : entities) {
+                        numValues += updateStatement.executeUpdate(entity);
+                    }
+                    return numValues;
+                }
+            }.execute();
         }
+        return updateCount;
+    }
 
-        public SelectStatementErrorMsgBuilder setSql(String sql) {
-            this.sql = sql;
-            return this;
-        }
+    public Cursor selectCursorBySql(String s, Object[] selectionArgs) {
+        return selectCursorBySql(s, null, selectionArgs);
+    }
 
-        public SelectStatementErrorMsgBuilder setTableName(String tableName) {
-            this.tableName = tableName;
-            return this;
-        }
+    /**
+     * @param sql
+     * @param listener
+     * @param selectionArgs
+     * @return
+     */
+    public Cursor selectCursorBySql(final String sql, SelectExecuteLister listener, final Object... selectionArgs) {
+        Cursor cursor = new AbstractSelectStatementExecuter(dbHelper, listener) {
+            @Override
+            protected Cursor doInTransaction(SQLiteDatabase db) {
+                String[] args = QueryUtils.toStirngArrayArgs(selectionArgs);
+                Cursor cursor = db.rawQuery(sql, args);
+                return cursor;
+            }
+        }.execute();
+        return cursor;
     }
 }

@@ -95,11 +95,11 @@ public abstract class EntityQueryExecutor<T extends Entity> {
     // protected Method
     // -------------------------------------------------------------
     protected Delete.From<T> newDeleteFrom() {
-        return manager.newDeleteFrom(entity);
+        return manager.newDelete(entity);
     }
 
     protected Insert<T> newInsertInto() {
-        return manager.newInsertInto(entity);
+        return manager.newInsert(entity);
     }
 
     protected Select newSelect(Select.Column... columns) {

@@ -39,7 +39,8 @@ public class AssertUtils {
     }
 
     public static void assertAnnotation(DatabaseConfigration config) {
-        List<Class<? extends Entity>> classes = null;
+        List<Class<? extends Entity>> classes;
+
         if (config.getEntityList() != null && !config.getEntityList().isEmpty()) {
             classes = config.getEntityList();
         } else {

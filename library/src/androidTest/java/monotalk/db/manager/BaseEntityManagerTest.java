@@ -17,12 +17,14 @@ import java.util.Date;
 import java.util.List;
 
 import monotalk.db.DBLog;
+import monotalk.db.LazyList;
 import monotalk.db.TestContentProvider1;
 import monotalk.db.TestModel1;
-import monotalk.db.query.QueryBuilder;
 import monotalk.db.query.Selection;
 import monotalk.db.rules.LogRule;
 
+import static monotalk.db.query.QueryUtils.from;
+import static monotalk.db.query.QueryUtils.idEquals;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -125,7 +127,7 @@ public abstract class BaseEntityManagerTest {
         long id = setUpTestData();
         EntityManager manager = getEntityManager();
         TestModel1 model1 = new TestModel1();
-        model1.setId(id);
+        model1.id = id;
         int updateCount = manager.delete(model1);
         assertThat(updateCount, is(1));
         model1 = manager.selectOneById(TestModel1.class, id);
@@ -140,12 +142,12 @@ public abstract class BaseEntityManagerTest {
         long id = setUpTestData();
         EntityManager manager = getEntityManager();
         TestModel1 model1 = new TestModel1();
-        model1.setId(id);
+        model1.id = id;
         model1.columnLong = 456l;
         model1.columnBoolean = true;
         model1.dateColumn = new Date(111111111111111l);
 
-        int updateCount = manager.updateById(model1.getClass(), QueryBuilder.toValues(model1), model1.getId());
+        int updateCount = manager.updateById(model1.getClass(), from(model1), model1.id);
         assertThat(updateCount, is(1));
         model1 = manager.selectOneById(TestModel1.class, id);
         assertThat(model1.columnLong, is(456l));
@@ -161,7 +163,7 @@ public abstract class BaseEntityManagerTest {
         long id = setUpTestData();
         EntityManager manager = getEntityManager();
         TestModel1 model1 = new TestModel1();
-        model1.setId(id);
+        model1.id = id;
         model1.columnLong = 777l;
         model1.columnBoolean = false;
         model1.dateColumn = new Date(22222222222222222l);
@@ -183,15 +185,15 @@ public abstract class BaseEntityManagerTest {
         long id = setUpTestData();
         EntityManager manager = getEntityManager();
         TestModel1 model1 = new TestModel1();
-        model1.setId(id);
+        model1.id = id;
         model1.columnLong = 777l;
         model1.columnBoolean = false;
         model1.dateColumn = new Date(22222222222222222l);
         // ===========================
         // execute
         // ===========================
-        Selection selection = QueryBuilder.idEquals(TestModel1.class, id);
-        int updateCount = manager.update(TestModel1.class, QueryBuilder.toValues(model1), selection.getSelection(), selection.getSelectionArgs());
+        Selection selection = idEquals(TestModel1.class, id);
+        int updateCount = manager.update(TestModel1.class, from(model1), selection.getSelection(), selection.getSelectionArgs());
         assertThat(updateCount, is(1));
 
         TestModel1 model2 = manager.selectOneById(TestModel1.class, id);
@@ -212,7 +214,7 @@ public abstract class BaseEntityManagerTest {
         long id = setUpTestData();
         EntityManager manager = getEntityManager();
         TestModel1 model1 = new TestModel1();
-        model1.setId(id);
+        model1.id = id;
         model1.columnLong = null;
         model1.columnBoolean = null;
         model1.dateColumn = new Date(22222222222222222l);
@@ -230,6 +232,29 @@ public abstract class BaseEntityManagerTest {
         assertThat(model2.columnBoolean, is(true));
         assertThat(model2.dateColumn, is(new Date(22222222222222222l)));
         assertThat(model2, is(model1));
+    }
+
+    @Test
+    public void selectLazyList() {
+        EntityManager manager = getEntityManager();
+        // ==========================
+        // insert test data
+        // ==========================
+        setUpTestData();
+        setUpTestData();
+        // ===========================
+        // execute
+        // ===========================
+        LazyList<TestModel1> list = manager.selectLazyListAll(TestModel1.class);
+
+        // ===========================
+        // verify
+        // ===========================
+        assertThat(list.size(), is(2));
+
+        for(TestModel1 model1 : list) {
+            assertThat(model1.columnString, is("TESTColumns"));
+        }
     }
 
     @Test
@@ -402,7 +427,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models1 = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE_NO_TRANSACTION" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;
@@ -437,7 +462,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models2 = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE_WITH_TRANSACTION" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;
@@ -490,7 +515,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models3 = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;
@@ -522,7 +547,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models3 = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;
@@ -551,7 +576,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;
@@ -588,7 +613,7 @@ public abstract class BaseEntityManagerTest {
         final List<TestModel1> models1 = new ArrayList<TestModel1>();
         for (int i = 0; i < 3000; i++) {
             TestModel1 model1 = new TestModel1();
-            model1.setId(ids[i]);
+            model1.id = ids[i];
             model1.columnString = "TEST_UPDATE_NO_TRANSACTION" + i;
             model1.columnLong = Long.valueOf(i);
             model1.columnBoolean = true;

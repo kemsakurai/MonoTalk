@@ -3,6 +3,7 @@ package monotalk.db.typeconverter;
 import android.annotation.TargetApi;
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteProgram;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Build;
@@ -40,7 +41,7 @@ public class BitmapConverter extends BaseTypeConverter<Bitmap> {
     }
 
     @Override
-    public String toBindSql(Bitmap object) {
+    public String toStringBindArg(Bitmap object) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         object.compress(Bitmap.CompressFormat.PNG, 100, stream);
         byte[] bytes = stream.toByteArray();
@@ -50,6 +51,14 @@ public class BitmapConverter extends BaseTypeConverter<Bitmap> {
     @Override
     public SQLiteType getSqlType() {
         return SQLiteType.BLOB;
+    }
+
+    @Override
+    public void bind(SQLiteProgram program, int index, Bitmap value) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        value.compress(Bitmap.CompressFormat.PNG, 100, stream);
+        byte[] bytes = stream.toByteArray();
+        program.bindBlob(index, bytes);
     }
 
 }

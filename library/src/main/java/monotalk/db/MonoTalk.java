@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2014 Kem
+* Copyright (C) 2013-2015 Kem
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 package monotalk.db;
 
 import android.content.Context;
-import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteDatabase;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -78,30 +78,37 @@ public class MonoTalk {
     }
 
     /**
-     * initialize method
+     * 初期化メソッド
      *
-     * @param context
+     * @param context アプリケーションコンテキスト
+     * @param config
      */
-    public static void init(Context context) {
+    public static DatabaseConnectionSource init(Context context, DatabaseConfigration config) {
         LogLevel level = ResourceUtis.getLogLevel(context);
         boolean assertEntity = ResourceUtis.isAsertEntity(context);
-        init(context, level, assertEntity);
+        return init(context, level, assertEntity, config);
     }
 
     /**
+     * 初期化メソッド
+     *
      * @param context
      * @param logLevel
      * @param assertEntity
+     * @param config
      */
-    public synchronized static void init(Context context, LogLevel logLevel, boolean assertEntity) {
+    public synchronized static DatabaseConnectionSource init(Context context, LogLevel logLevel, boolean assertEntity, DatabaseConfigration config) {
         if (initialized) {
-            DBLog.w(TAG_NAME, "Already initialized.");
-            return;
+            DBLog.i(TAG_NAME, "Already initialized.");
+        } else {
+            // ## set LogLevel
+            DBLog.setLogLevel(logLevel);
+            // ## set doAssert
+            AssertUtils.setAssertEntity(assertEntity);
+            // ## set Context
+            MonoTalk.context = context.getApplicationContext();
         }
-        // ## values LogLevel
-        DBLog.setLogLevel(logLevel);
-        MonoTalk.context = context.getApplicationContext();
-        AssertUtils.setAssertEntity(assertEntity);
+        return registerDatabaseConnectionSource(config);
     }
 
     /**
@@ -109,10 +116,11 @@ public class MonoTalk {
      *
      * @param context
      * @param logLevel
+     * @param config
      */
-    public static void init(Context context, LogLevel logLevel) {
+    public static DatabaseConnectionSource init(Context context, LogLevel logLevel, DatabaseConfigration config) {
         boolean assertEntity = ResourceUtis.isAsertEntity(context);
-        init(context, logLevel, assertEntity);
+        return init(context, logLevel, assertEntity, config);
     }
 
     /**
@@ -120,10 +128,11 @@ public class MonoTalk {
      *
      * @param context
      * @param assertEntity
+     * @param config
      */
-    public static void init(Context context, boolean assertEntity) {
+    public static DatabaseConnectionSource init(Context context, boolean assertEntity, DatabaseConfigration config) {
         LogLevel level = ResourceUtis.getLogLevel(context);
-        init(context, level, assertEntity);
+        return init(context, level, assertEntity, config);
     }
 
     /**
@@ -141,9 +150,9 @@ public class MonoTalk {
 
         /* tableInfo */
         Map<Class<? extends Entity>, TableInfo> infos = new LinkedHashMap<Class<? extends Entity>, TableInfo>();
-        for (Class<? extends Entity> model : config.getEntityList()) {
-            TableInfo info = new TableInfo(model);
-            infos.put(model, info);
+        for (Class<? extends Entity> entity : config.getEntityList()) {
+            TableInfo info = new TableInfo(entity);
+            infos.put(entity, info);
         }
         tableInfoMap.putAll(infos);
 
@@ -158,7 +167,7 @@ public class MonoTalk {
             DBLog.i(TAG_NAME, "It is already registered key . Overrides registration . key value= [" + connectionSource.getDataBaseName() + "] ");
         }
         nameMappedFactory.registerDatabaseConnectionSource(connectionSource.getDataBaseName(), connectionSource);
-        DBLog.i(TAG_NAME, connectionSource.toString());
+        DBLog.i(TAG_NAME, "---registerDatabaseConnectionSource---," + connectionSource.toString());
         return connectionSource;
     }
 
@@ -194,37 +203,47 @@ public class MonoTalk {
     // -------------------------------------------------------------
 
     /**
+     * DefaultDatabaseに紐付けられたEntityManagerを返します。
+     *
      * @return
      */
-    public static EntityManager getDBHelperManagerByDefaultDbName() {
+    public static EntityManager getDBManagerByDefaultDbName() {
         return nameMappedFactory.newEntityManager(EntityManagerType.DB_OPEN_HELPER);
     }
 
     /**
-     * @param name
-     * @return
+     * Database名を元に紐づけられEntityManagerを返します。
+     *
+     * @param name database名
+     * @return EntityManager
      */
-    public static EntityManager getDBHelperManagerByDbName(String name) {
+    public static EntityManager getDBManagerByDbName(String name) {
         return nameMappedFactory.newEntityManager(name, EntityManagerType.DB_OPEN_HELPER);
     }
 
     /**
-     * @return
+     * DefaultDatabaseに紐付けられたSQLiteDatabaseを返します。
+     *
+     * @return SQLiteDatabase
      */
-    public static SQLiteOpenHelper getDbHelperByDefaultDbName() {
-        return nameMappedFactory.getSQLiteOpenHelper();
+    public static SQLiteDatabase getWritableDatabaseByDefaultDbName() {
+        return nameMappedFactory.getSQLiteOpenHelper().getWritableDatabase();
     }
 
     /**
-     * @param name
+     * Database名を元に紐づけられたSQLiteDatabaseを返します。
+     *
+     * @param name database名
      * @return
      */
-    public static SQLiteOpenHelper getDbHelperByDbName(String name) {
-        return nameMappedFactory.getSQLiteOpenHelper(name);
+    public static SQLiteDatabase getWritableDatabaseByDbName(String name) {
+        return nameMappedFactory.getSQLiteOpenHelper(name).getWritableDatabase();
     }
 
     /**
-     * @param type
+     * DefaultAuthorityに紐付けられたEntityManagerを返します。
+     *
+     * @param type EntityManagerType
      * @return
      */
     public static EntityManager getManagerByDefaultAuth(EntityManagerType type) {
@@ -232,9 +251,41 @@ public class MonoTalk {
     }
 
     /**
-     * @param name
-     * @param type
-     * @return
+     * DefaultAuthorityに紐付けられたEntityManagerを返します。
+     * 返すEntityManagerはContentProviderにアクセスします。
+     *
+     * @return EntityManager
+     */
+    public static EntityManager getDBProvierManagerByDefaultAuth() {
+        return authMappedFactory.newEntityManager(EntityManagerType.CONTENTES_PROVIER);
+    }
+
+    /**
+     * DefaultAuthorityに紐付けられたEntityManagerを返します。
+     * 返すEntityManagerはDatabaseに直接にアクセスします。
+     *
+     * @return EntityManager
+     */
+    public static EntityManager getDBManagerByDefaultAuth() {
+        return authMappedFactory.newEntityManager(EntityManagerType.DB_OPEN_HELPER);
+    }
+
+    /**
+     * DefaultAuthorityに紐付けられたEntityManagerを返します。
+     * 返すEntityManagerはProviderClient経由でDatabaseにアクセスします。
+     *
+     * @return EntityManager
+     */
+    public static EntityManager getDBProviderClientManagerByDefaultAuth() {
+        return authMappedFactory.newEntityManager(EntityManagerType.PROVIER_CLIENT);
+    }
+
+    /**
+     * Authorityに紐付けられたEntityManagerを返します。
+     *
+     * @param name Authority
+     * @param type EntityManagerType
+     * @return EntityManager
      */
     public static EntityManager getManagerByAuth(String name, EntityManagerType type) {
         return authMappedFactory.newEntityManager(name, type);

@@ -11,7 +11,9 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 import monotalk.db.DBLog.LogLevel;
 import monotalk.db.compat.DatabaseCompat;
@@ -19,7 +21,6 @@ import monotalk.db.DatabaseConfigration;
 import monotalk.db.MonoTalk;
 import monotalk.db.TestModel1;
 import monotalk.db.rules.LogRule;
-import monotalk.db.utility.ConvertUtils;
 
 import static org.junit.Assert.assertEquals;
 
@@ -33,10 +34,9 @@ public class EntityRowMapperTest {
     @Before
     public void setUp() {
         MonoTalk.dispose();
-        MonoTalk.init(Robolectric.application.getApplicationContext(), LogLevel.VERBOSE);
         String authority = "test";
-        DatabaseConfigration config = createDatabaseConfigration(authority);
-        MonoTalk.registerDatabaseConnectionSource(config);
+        DatabaseConfigration config = createDatabaseConfigration();
+        MonoTalk.init(Robolectric.application.getApplicationContext(), LogLevel.VERBOSE, config);
     }
 
     @Test
@@ -58,16 +58,16 @@ public class EntityRowMapperTest {
 
     @Test
     public void mapRowPerformanceCheck1() {
-        RowMapper<TestModel1> mapper = new TestModelRowMapper();
+        TestModelRowListMapper mapper = new TestModelRowListMapper();
         MatrixCursor cursor = createTestCursor();
-        ConvertUtils.toRowList(mapper, cursor);
+        mapper.mapRowListAndClose(cursor);
     }
 
     @Test
     public void mapRowPerformanceCheck2() {
-        RowMapper<TestModel1> mapper = new EntityRowMapper<TestModel1>(TestModel1.class, null);
+        EntityRowListMapper<TestModel1> mapper = new EntityRowListMapper<TestModel1>(TestModel1.class, null);
         MatrixCursor cursor = createTestCursor();
-        ConvertUtils.toRowList(mapper, cursor);
+        mapper.mapRowListAndClose(cursor);
     }
 
     private MatrixCursor createTestCursor() {
@@ -81,30 +81,33 @@ public class EntityRowMapperTest {
         return cursor;
     }
 
-    protected DatabaseConfigration createDatabaseConfigration(String authority) {
+    protected DatabaseConfigration createDatabaseConfigration() {
         DatabaseConfigration.Builder builder = new DatabaseConfigration.Builder();
         builder.setDataBaseName("Test.db");
         builder.setVersion(1);
         builder.setDefalutDatabase(true);
         builder.setNodeCacheSize(1000);
-        builder.setTableCacheSize(1000);
         builder.addTable(TestModel1.class);
         return builder.create();
     }
 
-    public static class TestModelRowMapper implements RowMapper<TestModel1> {
-        public TestModelRowMapper() {
-        }
-
+    public static class TestModelRowListMapper implements RowListMapper<TestModel1> {
         @Override
-        public TestModel1 mapRow(Cursor cursor) {
-            TestModel1 model = new TestModel1();
-            model.columnLong = cursor.getLong(cursor.getColumnIndex("LongColumn"));
-            model.columnString = cursor.getString(cursor.getColumnIndex("StringColumn"));
-            model.columnBoolean = cursor.getLong(cursor.getColumnIndex("BooleanColumn")) == 1 ? true : false;
-            model.dateColumn = new Date(cursor.getColumnIndex("DateColumn"));
-            return model;
+        public List<TestModel1> mapRowListAndClose(Cursor cursor) {
+            List<TestModel1> models1 = new ArrayList<TestModel1>();
+            if (cursor.moveToFirst()) {
+                do {
+                    TestModel1 model = new TestModel1();
+                    model.columnLong = cursor.getLong(cursor.getColumnIndex("LongColumn"));
+                    model.columnString = cursor.getString(cursor.getColumnIndex("StringColumn"));
+                    model.columnBoolean = cursor.getLong(cursor.getColumnIndex("BooleanColumn")) == 1 ? true : false;
+                    model.dateColumn = new Date(cursor.getColumnIndex("DateColumn"));
+                    models1.add(model);
+                } while (cursor.moveToNext());
+            }
+            List<TestModel1> models = models1;
+            cursor.close();
+            return models;
         }
-
     }
 }

@@ -15,12 +15,14 @@
  ******************************************************************************/
 package monotalk.db.manager;
 
+import android.content.ContentProviderOperation;
 import android.content.ContentValues;
 import android.database.Cursor;
 
 import java.util.List;
 
 import monotalk.db.Entity;
+import monotalk.db.LazyList;
 import monotalk.db.query.Delete;
 import monotalk.db.query.DeleteOperationBuilder;
 import monotalk.db.query.Insert;
@@ -30,9 +32,10 @@ import monotalk.db.query.TwoWayQuerySelect;
 import monotalk.db.query.Update;
 import monotalk.db.query.UpdateOperationBuilder;
 
+
 public interface EntityManager {
-    /**
-     * beginTransaction トランザクションを開始する
+    /**.
+     * beginTransaction トランザクションを開始します
      */
     public void beginTransactionNonExclusive();
 
@@ -70,7 +73,7 @@ public interface EntityManager {
      * @param <T>   Entityクラスの型
      * @return Delete.From
      */
-    public <T extends Entity> Delete.From<T> newDeleteFrom(Class<T> table);
+    public <T extends Entity> Delete.From<T> newDelete(Class<T> table);
 
     /**
      * Insert文を発行するQueryBuilderクラスを生成する
@@ -79,7 +82,7 @@ public interface EntityManager {
      * @param <T>
      * @return
      */
-    public <T extends Entity> Insert<T> newInsertInto(Class<T> table);
+    public <T extends Entity> Insert<T> newInsert(Class<T> table);
 
     /**
      * Select文を発行するQueryBuilderクラスを生成する
@@ -97,9 +100,32 @@ public interface EntityManager {
      */
     public Select newSelect(String... columns);
 
+    /**
+     * 2WaySqlのQueryBuilderクラスを生成する
+     *
+     * @param table
+     * @param filePath
+     * @param <T>
+     * @return
+     */
     public <T extends Entity> TwoWayQuerySelect<T> newSelectBySqlFile(Class<T> table, String filePath);
 
+    /**
+     * Update文を発行するQueryBuilderクラスを生成する
+     *
+     * @param table
+     * @param <T>
+     * @return
+     */
     public <T extends Entity> Update<T> newUpdate(Class<T> table);
+
+    /**
+     * Idをキーにデータを更新するContentProviderOperationを作成します。
+     *
+     * @param clazz Entityクラス
+     * @return
+     */
+    public ContentProviderOperation newUpdateByIdOperation(Class<? extends Entity> clazz, ContentValues value, long id);
 
     /**
      * データを更新するContentProviderOperation.Builderを作成します。
@@ -108,6 +134,14 @@ public interface EntityManager {
      * @return
      */
     public UpdateOperationBuilder newUpdateOperationBuilder(Class<? extends Entity> clazz);
+
+    /**
+     * Idをキーにデータを削除するContentProviderOperationを作成します。
+     *
+     * @param clazz Entityクラス
+     * @return
+     */
+    public ContentProviderOperation newDeleteByIdOperation(Class<? extends Entity> clazz, long id);
 
     /**
      * データを登録するContentProviderOperation.Builderを作成します。
@@ -171,10 +205,13 @@ public interface EntityManager {
      */
     public <T extends Entity> int updateById(Class<T> clazz, ContentValues values, long id);
 
+    /**
+     * トランザクションを終了します
+     */
     public void endTransaction();
 
     /**
-     * データを登録する
+     * データを登録します
      *
      * @param clazz
      * @param values
@@ -184,7 +221,7 @@ public interface EntityManager {
     public <T extends Entity> long insert(Class<T> clazz, ContentValues values);
 
     /**
-     * データを登録する
+     * データを登録します
      *
      * @param object
      * @return
@@ -242,7 +279,7 @@ public interface EntityManager {
     public Cursor selectCursorBySql(String sql, Object... selectionArgs);
 
     /**
-     * テーブルからデータを全件取得する
+     * テーブルからデータを全件取得します
      *
      * @param clazz Modelクラス名
      * @return データ取得結果(List)
@@ -250,7 +287,15 @@ public interface EntityManager {
     public <T extends Entity> List<T> selectListAll(Class<T> clazz);
 
     /**
-     * キー値を指定して、データを取得する
+     * テーブルからデータを全件取得します
+     *
+     * @param clazz Modelクラス名
+     * @return データ取得結果(List)
+     */
+    public <T extends Entity> LazyList<T> selectLazyListAll(Class<T> clazz);
+
+    /**
+     * キー値を指定して、データを取得します
      *
      * @param clazz Entityクラス
      * @return データの取得結果
@@ -288,8 +333,7 @@ public interface EntityManager {
      * @param selectionArgs
      * @return
      */
-    public <T extends Entity> int update(Class<T> clazz, ContentValues data, String selection,
-                                         Object... selectionArgs);
+    public <T extends Entity> int update(Class<T> clazz, ContentValues data, String selection, Object... selectionArgs);
 
     /**
      * updateする

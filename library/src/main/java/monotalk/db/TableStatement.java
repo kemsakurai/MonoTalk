@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright (C) 2013-2015 Kem
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package monotalk.db;
 
 import android.content.ContentValues;
@@ -6,12 +21,8 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
 import android.util.Log;
 
-import java.lang.reflect.Field;
-
 import monotalk.db.compat.DatabaseCompat;
 import monotalk.db.query.QueryUtils;
-import monotalk.db.typeconverter.TypeConverter;
-import monotalk.db.typeconverter.TypeConverterCache;
 
 /**
  * Created by Kem on 2015/01/18.
@@ -37,11 +48,10 @@ public class TableStatement {
         }
 
         protected void bindAllArgs(Entity entity) {
-            for (Field field : MonoTalk.getTableInfo(type).getFields()) {
-                TypeConverter converter = TypeConverterCache.getTypeConverter(field.getType());
+            for (FieldInfo fieldinfo : MonoTalk.getTableInfo(type).getFieldInfos()) {
                 Object value = null;
                 try {
-                    value = field.get(entity);
+                    value = fieldinfo.getField().get(entity);
                 } catch (IllegalAccessException e) {
                     throw new IllegalStateException(e);
                 }
@@ -63,7 +73,7 @@ public class TableStatement {
         }
 
         protected void bindWhereIdArgs(Entity entity) {
-            statement.bindLong(index, entity.getId());
+            statement.bindLong(index, entity.id);
             index++;
         }
 
@@ -74,7 +84,6 @@ public class TableStatement {
                 index++;
             }
         }
-
     }
 
     class TableInsertStatement extends TableBaseStetement {
@@ -118,7 +127,7 @@ public class TableStatement {
         }
 
         public int executeUpdate(ContentValues values, long id) {
-            int updateCount = 0;
+            int updateCount;
             try {
                 clearBindings();
                 bindAllArgs(values);
@@ -132,7 +141,7 @@ public class TableStatement {
         }
 
         public int executeUpdate(Entity entity) {
-            int updateCount = 0;
+            int updateCount;
             try {
                 clearBindings();
                 bindAllArgs(entity);
@@ -157,7 +166,7 @@ public class TableStatement {
         }
 
         public int executeDelete(long id) {
-            int updateCount = 0;
+            int updateCount;
             try {
                 clearBindings();
                 bindId(id);
@@ -170,7 +179,7 @@ public class TableStatement {
         }
 
         public int executeDelete(Entity entity) {
-            int updateCount = 0;
+            int updateCount;
             try {
                 clearBindings();
                 bindWhereIdArgs(entity);
@@ -193,7 +202,7 @@ public class TableStatement {
         }
 
         public android.database.Cursor rawQery(Entity entity) {
-            long id = entity.getId();
+            long id = entity.id;
             return db.rawQuery(buildSql, new String[]{String.valueOf(id)});
         }
 

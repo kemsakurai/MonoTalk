@@ -8,10 +8,11 @@ import java.util.List;
 
 import monotalk.db.DBLog;
 import monotalk.db.Entity;
+import monotalk.db.FieldInfo;
 import monotalk.db.MonoTalk;
 import monotalk.db.TableInfo;
+import monotalk.db.exception.IllegalAccessRuntimeException;
 import monotalk.db.utility.AssertUtils;
-import monotalk.db.utility.ConvertUtils;
 
 /**
  * Created by Kem on 2015/01/11.
@@ -19,49 +20,53 @@ import monotalk.db.utility.ConvertUtils;
 public class EntityValuesMapper<T extends Entity> implements ValuesMapper<T> {
 
     private static final String TAG_NAME = DBLog.getTag(EntityValuesMapper.class);
+    private final boolean isExcludeNull;
+    private TableInfo info = null;
+    private List<String> listColumns;
+    private ColumnsOpelation columnsOpelation;
 
-    private TableInfo info;
-    private boolean isExcludeNull;
-    private boolean isExcludeColums;
-    private String[] columns;
-
-    private EntityValuesMapper(Class<T> type, boolean isExcludeNull, boolean isExcludeColums, String[] columns) {
+    private EntityValuesMapper(Class<T> type, boolean isExcludeNull, boolean isExcludesColumns, String[] columns) {
         AssertUtils.assertNotNull(columns, "columns is Null");
         AssertUtils.assertNotNull(type, "type is Null");
         TableInfo info = MonoTalk.getTableInfo(type);
         AssertUtils.assertNotNull(info, "info is Null");
         this.info = info;
+        this.listColumns = Arrays.asList(columns);
         this.isExcludeNull = isExcludeNull;
-        this.isExcludeColums = isExcludeColums;
-        this.columns = columns;
+        if (isExcludesColumns) {
+            this.columnsOpelation = new ExcludesColumnsOpelation();
+        } else {
+            this.columnsOpelation = new IncludesColumnsOpelation();
+        }
     }
 
     @Override
-    public ContentValues mapValues(T object) {
+    public ContentValues mapValues(T entity) {
         ContentValues values = new ContentValues();
-        List<String> listColums = Arrays.asList(columns);
-        for (Field field : info.getFields()) {
-            final String fieldName = info.getColumnName(field);
-            if (isExcludeColums) {
-                if (listColums.contains(fieldName)) {
-                    continue;
-                }
-            } else {
-                if (!listColums.contains(fieldName)) {
-                    continue;
-                }
+        for (FieldInfo fieldInfo : info.getFieldInfos()) {
+            final String fieldName = fieldInfo.getColumnName();
+            if (!columnsOpelation.isTargetColumn(fieldName)) {
+                continue;
             }
+            Field field = fieldInfo.getField();
             field.setAccessible(true);
             try {
-                Object value = field.get(object);
-                if (value == null && isExcludeNull) {
+                Object value = field.get(entity);
+                if (value == null) {
+                    if (isExcludeNull) {
+                        continue;
+                    }
+                    values.putNull(fieldName);
                     continue;
                 }
-                ConvertUtils.addValue(fieldName, value, values);
+                fieldInfo.getConverter().pack(value, values, fieldName);
+
             } catch (IllegalArgumentException e) {
                 DBLog.e(TAG_NAME, e.getClass().getName(), e);
+                throw e;
             } catch (IllegalAccessException e) {
                 DBLog.e(TAG_NAME, e.getClass().getName(), e);
+                throw new IllegalAccessRuntimeException(e);
             }
         }
         return values;
@@ -104,6 +109,24 @@ public class EntityValuesMapper<T extends Entity> implements ValuesMapper<T> {
 
         public EntityValuesMapper create() {
             return new EntityValuesMapper(type, isExcludeNull, isExcludeColums, columns);
+        }
+    }
+
+    abstract class ColumnsOpelation {
+        abstract boolean isTargetColumn(String columnName);
+    }
+
+    class ExcludesColumnsOpelation extends ColumnsOpelation {
+        @Override
+        boolean isTargetColumn(String columnName) {
+            return !listColumns.contains(columnName);
+        }
+    }
+
+    class IncludesColumnsOpelation extends ColumnsOpelation {
+        @Override
+        boolean isTargetColumn(String columnName) {
+            return listColumns.contains(columnName);
         }
     }
 }

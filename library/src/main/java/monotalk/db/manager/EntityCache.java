@@ -7,6 +7,5 @@ import monotalk.db.Entity;
  */
 public interface EntityCache {
     public <T extends Entity> T getEntityOrSelect(Class<T> entityType, long entityId);
-
     public void evictAllEntity();
 }

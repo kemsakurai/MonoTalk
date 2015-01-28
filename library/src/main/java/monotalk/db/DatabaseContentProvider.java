@@ -1,11 +1,11 @@
 /*******************************************************************************
- * Copyright (C) 2012-2014 Kem
+ * Copyright (C) 2013-2015 Kem
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,8 +35,6 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.SparseArray;
 
-import org.seasar.dbflute.cbean.SimpleMapPmb;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,6 +48,11 @@ import monotalk.db.annotation.NoticeTarget;
 import monotalk.db.annotation.NoticeTargets;
 import monotalk.db.annotation.Table;
 import monotalk.db.compat.DatabaseCompat;
+import monotalk.db.querydata.SelectQueryData;
+import monotalk.db.querydata.TwoWayQueryData;
+
+import static monotalk.db.TransactionManager.ModifyExecuteLister;
+import static monotalk.db.TransactionManager.SelectExecuteLister;
 
 /**
  * DatabaseContentProvider.java
@@ -60,34 +63,30 @@ import monotalk.db.compat.DatabaseCompat;
 public abstract class DatabaseContentProvider extends ContentProvider {
 
     private static final String TAG_NAME = DBLog.getTag(DatabaseContentProvider.class);
+    private static final int DEFAULT_DELAY = 500;
     // =================================================================
     // Member Filed
     // =================================================================
-    private SqlManager sqlManager;
+    private DmlExecutor dmlExecutor;
+    private TransactionManager txManager;
     private NotificationUriManager uriManager;
     private SparseArray<Class<? extends Entity>> typeCodes = new SparseArray<Class<? extends Entity>>();
     private UriMatcher uriMatcer = new UriMatcher(UriMatcher.NO_MATCH);
     private String authority;
-    private static final int DEFAULT_DELAY = 500;
-
-    private boolean isNoMatch(Uri uri) {
-        return UriMatcher.NO_MATCH == uriMatcer.match(uri);
-    }
 
     @Override
     public boolean onCreate() {
-        MonoTalk.init(getContext());
         // register DatabaseConfigration
         DatabaseConfigration config = newDatabaseConfigration();
-        DatabaseConnectionSource databaseConnnection = MonoTalk.registerDatabaseConnectionSource(config);
+        DatabaseConnectionSource databaseConnnection = MonoTalk.init(getContext(), config);
+        dmlExecutor = new DmlExecutor(databaseConnnection);
+        uriManager = new NotificationUriManager();
+        txManager = new TransactionManager(databaseConnnection.getDbHelper());
 
         // register DatabaseProviderConfigration
         String authority = getAuthority(getContext(), getClass());
         DatabaseProviderConnectionSource providerConnection = newProviderConnectionSource(authority, databaseConnnection);
         MonoTalk.registerProvierConnnectionSource(providerConnection);
-
-        uriManager = new NotificationUriManager();
-        sqlManager = new SqlManager(databaseConnnection);
 
         int i = 0;
         for (Class<? extends Entity> entityClass : providerConnection.getEntityClasses()) {
@@ -109,22 +108,6 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         return true;
     }
 
-    /**
-     * ProviderConnectionSourceのコネクションソースを生成する
-     *
-     * @param authority
-     * @param databaseConnnection
-     * @return
-     */
-    protected DatabaseProviderConnectionSource newProviderConnectionSource(String authority, DatabaseConnectionSource databaseConnnection) {
-        return new DatabaseProviderConnectionSource.Builder()
-                .authority(authority)
-                .connectionSource(databaseConnnection)
-                .isDefaultAuthority(true)
-                .entityClasses(databaseConnnection.getEntityClasses())
-                .build();
-    }
-
     @Override
     public Cursor query(final Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         if (DBLog.isLoggable(LogLevel.DEBUG)) {
@@ -135,17 +118,15 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         // ## Process Transaction ##
         // --------------------------------------------------------
         String transaction = UriUtils.getTransaction(uri);
-
         if (!TextUtils.isEmpty(transaction)) {
             // Transactionパラメータが設定されている場合は、Transaction処理を行う
-            processTransaction(transaction);
-            return null;
+            return processTransaction(transaction);
+
         }
         // --------------------------------------------------------
         // ## Process YieidIfContended ##
         // --------------------------------------------------------
         String yieldIfContended = UriUtils.getYieldIfContendedFromUri(uri);
-
         if (!TextUtils.isEmpty(yieldIfContended)) {
             // YieidIfContendedSafelyを実行
             return processYieidIfContendedSafely(yieldIfContended);
@@ -156,42 +137,32 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         // --------------------------------------------------------
         String sqlFilePath = UriUtils.getSqlFilePath(uri);
         Cursor cursor;
-
         // SQLFilePathが指定されている場合は、2waySql向けの処理を行う
-        SqlManager.SelectExecuteLister listener = createSelectStatementExecuteListener(uri);
+        SelectExecuteLister listener = createSelectStatementExecuteListener(uri);
         if (!TextUtils.isEmpty(sqlFilePath)) {
             // ## create Parameter Uri
-            SimpleMapPmb<Object> mapPmb = UriUtils.createSimpleMapPmbFromUri(uri);
-            if (!mapPmb.isEmpty()) {
-                cursor = sqlManager.selectCursorBySqlFile(sqlFilePath, mapPmb, listener);
-            } else {
-                cursor = sqlManager.selectCursorBySqlFile(sqlFilePath, null, listener);
-            }
+            TwoWayQueryData data = TwoWayQueryData.newInstance(sqlFilePath, uri);
+            cursor = dmlExecutor.selectCursorBySqlFile(data.getSqlFilePath(), data.getMapPmb(), listener);
         } else if (isItemUri(uri)) {
             long id = ContentUris.parseId(uri);
             Class<? extends Entity> clazz = getEntityClass(uri);
-            cursor = sqlManager.selectCursorById(clazz, id, listener);
+            cursor = dmlExecutor.selectCursorById(clazz, id, listener);
         } else {
             // ## Get Uri Parameter ##
-            boolean distinct = UriUtils.getDistinct(uri);
-            String limit = UriUtils.getLimit(uri);
-            String groupBy = UriUtils.getGroupBy(uri);
-            String having = UriUtils.getHaving(uri);
             Class<? extends Entity> clazz = getEntityClass(uri);
             if (clazz == null) {
                 DBLog.d(TAG_NAME, "clazz is null Uri = " + uri);
+                return null;
             }
-            cursor = sqlManager.selectCursorByWhereArrayStringArgs(
-                    distinct,
-                    clazz,
-                    projection,
-                    selection,
-                    groupBy,
-                    having,
-                    sortOrder,
-                    limit,
-                    selectionArgs,
-                    listener);
+            String tableName = MonoTalk.getTableName(clazz);
+            SelectQueryData data =
+                    SelectQueryData.newInstance(uri,
+                            tableName,
+                            projection,
+                            selection,
+                            selectionArgs,
+                            sortOrder);
+            cursor = dmlExecutor.selectCursorBySql(data.toSql(), listener, data.getSelectionArgs());
         }
         return cursor;
     }
@@ -203,6 +174,7 @@ public abstract class DatabaseContentProvider extends ContentProvider {
             DBLog.d(TAG_NAME, "Method[getType] start");
             DBLog.d(TAG_NAME, "parameter uri=[" + uri + "]");
         }
+
         String type;
         if (isNoMatch(uri)) {
             type = null;
@@ -218,6 +190,10 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         return type;
     }
 
+    private boolean isNoMatch(Uri uri) {
+        return UriMatcher.NO_MATCH == uriMatcer.match(uri);
+    }
+
     @Override
     public Uri insert(final Uri uri, final ContentValues values) {
         if (DBLog.isLoggable(LogLevel.DEBUG)) {
@@ -225,8 +201,8 @@ public abstract class DatabaseContentProvider extends ContentProvider {
             DBLog.d(TAG_NAME, "parameter uri=[" + uri + "]");
         }
         Class<? extends Entity> clazz = getEntityClass(uri);
-        SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
-        long id = sqlManager.insert(clazz, values, listener);
+        ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
+        long id = dmlExecutor.insert(clazz, values, listener);
         return ContentUris.withAppendedId(uri, id);
     }
 
@@ -237,8 +213,8 @@ public abstract class DatabaseContentProvider extends ContentProvider {
             DBLog.d(TAG_NAME, "parameter uri=[" + uri + "]");
         }
         Class<? extends Entity> clazz = getEntityClass(uri);
-        SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
-        return sqlManager.bulkInsert(clazz, values, listener);
+        ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
+        return dmlExecutor.bulkInsert(clazz, values, listener);
     }
 
     @Override
@@ -251,12 +227,12 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         if (isItemUri(uri)) {
             long id = ContentUris.parseId(uri);
             Class<? extends Entity> entity = getEntityClass(uri);
-            SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(entity);
-            return sqlManager.deleteById(entity, id, listener);
+            ModifyExecuteLister listener = newModifyStatementExecuteListener(entity);
+            return dmlExecutor.deleteById(entity, id, listener);
         } else {
             Class<? extends Entity> entity = getEntityClass(uri);
-            SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(entity);
-            return sqlManager.deleteByWhereArrayStringArgs(entity, selection, listener, selectionArgs);
+            ModifyExecuteLister listener = newModifyStatementExecuteListener(entity);
+            return dmlExecutor.deleteByWhereArrayStringArgs(entity, selection, listener, selectionArgs);
         }
     }
 
@@ -270,33 +246,33 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         if (isItemUri(uri)) {
             long id = ContentUris.parseId(uri);
             Class<? extends Entity> clazz = getEntityClass(uri);
-            SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
-            return sqlManager.updateById(clazz, values, id, listener);
+            ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
+            return dmlExecutor.updateById(clazz, values, id, listener);
         } else {
             Class<? extends Entity> clazz = getEntityClass(uri);
-            SqlManager.ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
+            ModifyExecuteLister listener = newModifyStatementExecuteListener(clazz);
             // SQLを実行する
-            return sqlManager.updateByWhereArrayStringArgs(clazz, values, selection, listener, selectionArgs);
+            return dmlExecutor.updateByWhereArrayStringArgs(clazz, values, selection, listener, selectionArgs);
         }
     }
 
     @Override
     public ContentProviderResult[] applyBatch(ArrayList<ContentProviderOperation> operations) throws OperationApplicationException {
-        sqlManager.beginTransactionWithListenerNonExclusive(newModifyStatementExecuteListenerForApplyBatch());
+        txManager.beginTransactionWithListenerNonExclusive(newModifyStatementExecuteListenerForApplyBatch());
         try {
             final int numOperations = operations.size();
             final ContentProviderResult[] results = new ContentProviderResult[numOperations];
             for (int i = 0; i < numOperations; i++) {
                 final ContentProviderOperation operation = operations.get(i);
                 if (i > 0 && operation.isYieldAllowed()) {
-                    sqlManager.yieldIfContendedSafely(getYieldDelay());
+                    txManager.yieldIfContendedSafely(getYieldDelay());
                 }
                 results[i] = operation.apply(this, results, i);
             }
-            sqlManager.setTransactionSuccessful();
+            txManager.setTransactionSuccessful();
             return results;
         } finally {
-            sqlManager.endTransaction();
+            txManager.endTransaction();
         }
     }
 
@@ -305,27 +281,13 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         throw new UnsupportedOperationException("method [" + method + "] not supported");
     }
 
-    private Class<? extends Entity> getEntityClass(Uri uri) {
-        final int code = uriMatcer.match(uri);
-        if (code != UriMatcher.NO_MATCH) {
-            return typeCodes.get(code);
-        }
-        return null;
-    }
-
     /**
      * ModifyExecuteListerを生成する
      *
-     * @param clazz
      * @return
      */
-    private SqlManager.ModifyExecuteLister newModifyStatementExecuteListener(final Class<? extends Entity> clazz) {
-        SqlManager.ModifyExecuteLister listener = new SqlManager.DefaultModifyExecuteListener() {
-            @Override
-            public void onPostExecuteQeury() {
-                uriManager.addNotifyChangeUri(clazz);
-            }
-
+    private ModifyExecuteLister newModifyStatementExecuteListenerForApplyBatch() {
+        ModifyExecuteLister listener = new TransactionManager.DefaultModifyExecuteListener() {
             @Override
             public void onCommit() {
                 uriManager.notifyChange(getContext());
@@ -334,13 +296,23 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         return listener;
     }
 
+    protected int getYieldDelay() {
+        return DEFAULT_DELAY;
+    }
+
     /**
      * ModifyExecuteListerを生成する
      *
+     * @param clazz
      * @return
      */
-    private SqlManager.ModifyExecuteLister newModifyStatementExecuteListenerForApplyBatch() {
-        SqlManager.ModifyExecuteLister listener = new SqlManager.DefaultModifyExecuteListener() {
+    private ModifyExecuteLister newModifyStatementExecuteListener(final Class<? extends Entity> clazz) {
+        ModifyExecuteLister listener = new TransactionManager.DefaultModifyExecuteListener() {
+            @Override
+            public void onPostExecuteQeury() {
+                uriManager.addNotifyChangeUri(clazz);
+            }
+
             @Override
             public void onCommit() {
                 uriManager.notifyChange(getContext());
@@ -358,19 +330,18 @@ public abstract class DatabaseContentProvider extends ContentProvider {
      * @param transaction 0:トランザクション開始,1:トランザクションコミット,2:トランザクション終了
      * @throws IllegalArgumentException
      */
-    private void processTransaction(String transaction) {
+    private Cursor processTransaction(String transaction) {
         // パラメータtransactionが設定されている場合の処理
         if (TextUtils.isEmpty(transaction)) {
             throw new IllegalArgumentException("Method transaction parameter is Empty");
         }
-
         if ("0".equals(transaction)) {
-            sqlManager.beginTransactionNonExclusive();
+            txManager.beginTransactionNonExclusive();
         } else if ("1".equals(transaction)) {
-            sqlManager.setTransactionSuccessful();
+            txManager.setTransactionSuccessful();
             uriManager.notifyChange(getContext());
         } else if ("2".equals(transaction)) {
-            sqlManager.endTransaction();
+            txManager.endTransaction();
             uriManager.clearUri();
         } else {
             // 例外を通知する
@@ -378,6 +349,7 @@ public abstract class DatabaseContentProvider extends ContentProvider {
                     "Parameter [transaction] is Illegal value = [%1$s]",
                     new Object[]{transaction}));
         }
+        return null;
     }
 
     /**
@@ -401,13 +373,13 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         int sleepAfterYieldDelay = Integer.parseInt(yieldIfContended);
         // パラメータtransactionが設定されている場合の処理
         if (sleepAfterYieldDelay == 0) {
-            result = sqlManager.yieldIfContendedSafely();
+            result = txManager.yieldIfContendedSafely();
             if (result) {
                 uriManager.notifyChange(getContext());
             }
         } else if (sleepAfterYieldDelay > 0) {
-            result = sqlManager.yieldIfContendedSafely(sleepAfterYieldDelay);
-            if (sqlManager.yieldIfContendedSafely(sleepAfterYieldDelay)) {
+            result = txManager.yieldIfContendedSafely(sleepAfterYieldDelay);
+            if (txManager.yieldIfContendedSafely(sleepAfterYieldDelay)) {
                 uriManager.notifyChange(getContext());
             }
         }
@@ -423,8 +395,8 @@ public abstract class DatabaseContentProvider extends ContentProvider {
      * @param uri
      * @return
      */
-    private SqlManager.SelectExecuteLister createSelectStatementExecuteListener(final Uri uri) {
-        SqlManager.SelectExecuteLister listener = new SqlManager.DefaultSelectExecuteListener() {
+    private SelectExecuteLister createSelectStatementExecuteListener(final Uri uri) {
+        SelectExecuteLister listener = new TransactionManager.DefaultSelectExecuteListener() {
             @Override
             public void onPostExecuteQeury(Cursor cursor) {
                 // ## values Uri
@@ -442,13 +414,15 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         return (1 == code % 2);
     }
 
-    protected LogLevel getLogLevel() {
-        return LogLevel.DEBUG;
+    private Class<? extends Entity> getEntityClass(Uri uri) {
+        final int code = uriMatcer.match(uri);
+        if (code != UriMatcher.NO_MATCH) {
+            return typeCodes.get(code);
+        }
+        return null;
     }
 
-    protected int getYieldDelay() {
-        return DEFAULT_DELAY;
-    }
+    abstract protected DatabaseConfigration newDatabaseConfigration();
 
     /**
      * get authority from AndroidManifest.xml
@@ -481,7 +455,21 @@ public abstract class DatabaseContentProvider extends ContentProvider {
         return authority;
     }
 
-    abstract protected DatabaseConfigration newDatabaseConfigration();
+    /**
+     * ProviderConnectionSourceのコネクションソースを生成する
+     *
+     * @param authority           authority
+     * @param databaseConnnection Connection of database
+     * @return
+     */
+    protected DatabaseProviderConnectionSource newProviderConnectionSource(String authority, DatabaseConnectionSource databaseConnnection) {
+        return new DatabaseProviderConnectionSource.Builder()
+                .authority(authority)
+                .databaseName(databaseConnnection.getDataBaseName())
+                .isDefaultAuthority(true)
+                .entityClasses(databaseConnnection.getEntityClasses())
+                .build();
+    }
 
     @SuppressWarnings("deprecation")
     protected String getAuthority() {

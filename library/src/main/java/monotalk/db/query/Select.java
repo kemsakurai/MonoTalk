@@ -1,17 +1,19 @@
-package monotalk.db.query;
-
-/*
- * Copyright (C) 2014 Kem
- * 
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
- * 
+/*******************************************************************************
+ * Copyright (C) 2013-2015 Kem
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
- */
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
+package monotalk.db.query;
 
 import android.annotation.SuppressLint;
 import android.database.Cursor;
@@ -22,18 +24,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 import monotalk.db.Entity;
+import monotalk.db.LazyList;
 import monotalk.db.MonoTalk;
 import monotalk.db.querydata.SelectQueryData;
+import monotalk.db.rowmapper.RowListMapper;
 import monotalk.db.rowmapper.RowMapper;
 
-public final class Select implements Sqlable {
+public final class Select {
     private String[] mColumns;
     private boolean mDistinct = false;
-    private QueryCrudHandler mModelManager;
+    private QueryCrudHandler mQueryCrudHandler;
 
     Select(QueryCrudHandler mManager, String... columns) {
         mColumns = columns;
-        mModelManager = mManager;
+        mQueryCrudHandler = mManager;
     }
 
     Select(QueryCrudHandler mManager, Column... columns) {
@@ -42,7 +46,7 @@ public final class Select implements Sqlable {
         for (int i = 0; i < size; i++) {
             mColumns[i] = columns[i].name + " AS " + columns[i].alias;
         }
-        mModelManager = mManager;
+        mQueryCrudHandler = mManager;
     }
 
     public Select distinct() {
@@ -56,35 +60,7 @@ public final class Select implements Sqlable {
     }
 
     public <T extends Entity> From<T> from(Class<T> clazz) {
-        return new From<T>(clazz, this);
-    }
-
-    @Override
-    public String toSql() {
-        StringBuilder sql = new StringBuilder();
-        sql.append("SELECT ");
-        if (mDistinct) {
-            sql.append("DISTINCT ");
-        }
-        if (mColumns != null && mColumns.length > 0) {
-            sql.append(TextUtils.join(", ", mColumns) + " ");
-        } else {
-            sql.append("* ");
-        }
-        return sql.toString();
-    }
-
-    static enum JoinType {
-        LEFT_JOIN("LEFT JOIN"), LEFT_OUTER_JOIN("LEFT OUTER JOIN"), INNER_JOIN("INNER JOIN"), CROSS_JOIN("CROSS JOIN");
-        private String sql;
-
-        JoinType(String sql) {
-            this.sql = sql;
-        }
-
-        public String toSql() {
-            return sql;
-        }
+        return new From<T>(clazz);
     }
 
     public static class Column {
@@ -105,9 +81,8 @@ public final class Select implements Sqlable {
         private String mOffset;
         private String mOrderBy;
 
-        From(Class<T> table, Sqlable queryBase) {
-            super(table, queryBase);
-            selection = new Selection();
+        From(Class<T> table) {
+            super(table);
             mJoins = new ArrayList<Join<T>>();
         }
 
@@ -174,117 +149,23 @@ public final class Select implements Sqlable {
             return join;
         }
 
-        public String toCountSql() {
-            final StringBuilder sql = new StringBuilder();
-            sql.append("SELECT COUNT(*) ");
-            addFrom(sql);
-            addJoins(sql);
-            addWhere(sql);
-            addGroupBy(sql);
-            addHaving(sql);
-            addLimit(sql);
-            addOffset(sql);
-            return sqlString(sql);
-        }
-
-        public String toExistsSql() {
-            final StringBuilder sql = new StringBuilder();
-            sql.append("SELECT EXISTS(SELECT 1 ");
-            addFrom(sql);
-            addJoins(sql);
-            addWhere(sql);
-            addGroupBy(sql);
-            addHaving(sql);
-            addLimit(sql);
-            addOffset(sql);
-            sql.append(")");
-            return sqlString(sql);
-        }
-
-        @Override
-        public String toSql() {
-            StringBuilder sql = new StringBuilder();
-            addQueryBase(sql);
-            addFrom(sql);
-            addJoins(sql);
-            addWhere(sql);
-            addGroupBy(sql);
-            addHaving(sql);
-            addOrderBy(sql);
-            addLimit(sql);
-            addOffset(sql);
-            return sqlString(sql);
-        }
-
         private SelectQueryData createQueryData() {
             SelectQueryData data = new SelectQueryData();
             data.setColumns(mColumns);
             data.setDistinct(mDistinct);
-            StringBuilder sql = new StringBuilder();
-            sql.append(MonoTalk.getTableName(mType)).append(" ");
-            if (mAlias != null) {
-                sql.append("AS ");
-                sql.append(mAlias);
-                sql.append(" ");
-            }
-            data.setTableName(sql.toString());
+            data.setTableName(MonoTalk.getTableName(mType));
+            data.setTableAlias(mAlias);
             data.setSelectionArgs(selection.getSelectionArgs());
             data.setWhere(selection.getSelection());
             data.setGroupBy(mGroupBy);
             data.setHaving(mHaving);
             for (final Join<T> join : mJoins) {
-                data.appendJoinString(join.toSql());
+                data.appendJoin(join.toSql());
             }
             data.setOrderBy(mOrderBy);
             data.setLimit(mLimit);
             data.setOffSet(mOffset);
             return data;
-        }
-
-        private void addGroupBy(final StringBuilder sql) {
-            if (mGroupBy != null) {
-                sql.append("GROUP BY ");
-                sql.append(mGroupBy);
-                sql.append(" ");
-            }
-        }
-
-        private void addHaving(final StringBuilder sql) {
-            if (mHaving != null) {
-                sql.append("HAVING ");
-                sql.append(mHaving);
-                sql.append(" ");
-            }
-        }
-
-        private void addJoins(final StringBuilder sql) {
-            for (final Join<T> join : mJoins) {
-                sql.append(join.toSql());
-            }
-        }
-
-        private void addLimit(final StringBuilder sql) {
-            if (mLimit != null) {
-                sql.append("LIMIT ");
-                sql.append(mLimit);
-                sql.append(" ");
-            }
-        }
-
-        private void addOffset(final StringBuilder sql) {
-            if (mOffset != null) {
-                sql.append("OFFSET ");
-                sql.append(mOffset);
-                sql.append(" ");
-            }
-        }
-
-        private void addOrderBy(final StringBuilder sql) {
-            if (mOrderBy != null) {
-                sql.append("ORDER BY ");
-                sql.append(mOrderBy);
-                sql.append(" ");
-            }
         }
 
         /**
@@ -295,47 +176,64 @@ public final class Select implements Sqlable {
         @Override
         public CursorLoader buildLoader() {
             SelectQueryData data = createQueryData();
-            return mModelManager.buildLoader(data);
+            return mQueryCrudHandler.buildLoader(data);
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public T selectOne() {
             SelectQueryData data = createQueryData();
             data.setLimit("1");
-            return mModelManager.selectOne(mType, data);
+            return mQueryCrudHandler.selectOne(mType, data);
         }
 
         @Override
         public Cursor selectCursor() {
             SelectQueryData data = createQueryData();
-            return mModelManager.selectCursor(data);
+            return mQueryCrudHandler.selectCursor(data);
         }
 
-        @SuppressWarnings("unchecked")
+        @Override
+        public LazyList<T> selectLazyList() {
+            SelectQueryData data = createQueryData();
+            return mQueryCrudHandler.selectLazyList(mType, data);
+        }
+
         @Override
         public List<T> selectList() {
             SelectQueryData data = createQueryData();
-            return mModelManager.selectList(mType, data);
+            return mQueryCrudHandler.selectList(mType, data);
         }
 
         @Override
         public <E> E selectOne(RowMapper<E> mapper) {
             SelectQueryData data = createQueryData();
             data.setLimit("1");
-            return mModelManager.selectOne(mapper, data);
+            return mQueryCrudHandler.selectOne(mapper, data);
         }
 
         @Override
-        public <E> List<E> selectList(RowMapper<E> mapper) {
+        public <E> List<E> selectList(RowListMapper<E> mapper) {
             SelectQueryData data = createQueryData();
-            return (List<E>) mModelManager.selectList(mapper, data);
+            return (List<E>) mQueryCrudHandler.selectList(mapper, data);
         }
 
         @Override
         public <E> E selectScalar(Class<E> clazz) {
             SelectQueryData data = createQueryData();
-            return mModelManager.selectScalar(clazz, data);
+            return mQueryCrudHandler.selectScalar(clazz, data);
+        }
+    }
+
+    static enum JoinType {
+        LEFT_JOIN("LEFT JOIN"), LEFT_OUTER_JOIN("LEFT OUTER JOIN"), INNER_JOIN("INNER JOIN"), CROSS_JOIN("CROSS JOIN");
+        private String sql;
+
+        JoinType(String sql) {
+            this.sql = sql;
+        }
+
+        public String toSql() {
+            return sql;
         }
     }
 
