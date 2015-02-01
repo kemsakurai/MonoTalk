@@ -1,35 +1,37 @@
 # MonoTalk
-MonoTalk is an ORM library that fits Android ContentProvider's interface  
+MonoTalk is an ORM library that fits Android ContentProvider's interface
 
-This Library baseed On 
 [Active Android](https://github.com/pardom/ActiveAndroid), [Ollie](https://github.com/pardom/ollie/), [Sprinkles](https://github.com/emilsjolander/sprinkles),
-[DBFlow](https://github.com/Raizlabs/DBFlow),[greenDAO](http://greendao-orm.com),  
-and J2EE ORM framework [DBFlute](http://dbflute.seasar.org),[S2JDBC](http://s2container.seasar.http://www.seasar.org/en/)
+[DBFlow](https://github.com/Raizlabs/DBFlow),[greenDAO](http://greendao-orm.com),[DBFlute](http://dbflute.seasar.org),[S2JDBC](http://s2container.seasar.org/2.4/ja/s2jdbc.html)
 
-## Functional Overview
-- You can create the database tables by @Table annotation in the Entity class.
-- You can create multiple database for single application
-- You can Simple CRUD by EnityManager's method such as <code>insert(); update();</code>
-- You can create advanced queries by QueryObject <code>manager.newSelect(); </code>
-- You can create Query which beyond QueryObject's spec by 2waySql
+等の実装を参考にしながら作成しています。  
 
 
-## Installing
-Add the maven repo url to your build.gradle:
+## 機能概要
+当ライブラリには以下の機能があります。
+- Entityクラスに記述したアノテーションからテーブルを作成します。
+- 複数DBの管理が可能です。
+- TABLEクラスからクエリを作成し、単純なCRUDな可能です。
+- 少し難しいクエリはクエリオブジェクトを使用して作成が可能です。
+- 難しいクエリは2waysqlを作成して実行が可能です。
+
+
+## 導入方法
+build.gradleに以下のmavenリポジトリの設定を追加してください。  
 
     repositories {
           maven { url 'https://kemsakurai.github.io/maven/master/releases' }
     }
-
-Add the library to the module-level or project-level build.gradle
+    
+build.gradleの以下の依存関係を追加してください。  
     
     dependencies {
          compile 'MonoTalk:monotalk-db:0.0.1'
     }
-    
-## Configuration
 
-Config Database and call <code>Monotalk.init()</code> in Your Application class
+## 使用方法
+
+Applicationを継承したクラスに以下のような記述を追加してください。  
 
 ```java
 	public class SampleApplication extends android.app.Application {
@@ -37,20 +39,23 @@ Config Database and call <code>Monotalk.init()</code> in Your Application class
 		@Override
     	public void onCreate() {
         	super.onCreate();
-            
+
+			// builderをnewする
 	        DatabaseConfigration.Builder builder = new DatabaseConfigration.Builder();
+    	    // batabase名を設定
 			builder.setDataBaseName("NotesDB");
+			// version番号を設定
         	builder.setVersion(1);
-			// default value is true
+			// default(プライマリ?) Databaseとして使用する場合,true (初期値true)
         	builder.setDefalutDatabase(true);
-			// Add Entity Classes
+        	// Databaseに関連づけするEntityクラスを設定
 			builder.addTable(Notes.class);
         	builder.addTable(NoteTag.class);
         	builder.addTable(Tag.class);
-			// initialize
+			// 初期化
         	MonoTalk.init(getApplicationContext(), builder.create());
 		}
-        
+		
 		@Override
 	    public void onTerminate() {
         	super.onTerminate();
@@ -59,12 +64,12 @@ Config Database and call <code>Monotalk.init()</code> in Your Application class
 	}
 ```
 
-## Entities
+## Entity(Table)クラスの作成
 
-- Extend Entity for all the classes that you need persisted.
-- your class must be annotated using @Table
-- your members must be annotated using @Column
-- "_id" PK column is Created by framework in accordance with android contentprovider guidelines
+- DATABASEのテーブル定義に対応するEntityクラスを作成します。  
+- EntityクラスはEntityを継承して作成します。
+- @Tableアノテーションで作成するTableを指定し、    
+  @Columnアノテーションで作成するColumn名を指定します。  
 
 ```java
 	@Table(name = "NOTES")
@@ -84,11 +89,15 @@ Config Database and call <code>Monotalk.init()</code> in Your Application class
         public Date date;
     }
 ```
-## CRUD DATABASE
+## データの登録 更新 削除  
 
-#### Simple CRUD
+  EntityManagerクラスを使用した単純なCRUD    
+  クエリオブジェクトを使用したCRUD  
+	2waysqlを使用したCRUDが実行できます。  
+	*2waysqlは現在READのみ可能です。
+	
+#### EntityManagerクラスを使用したCRUD
 INSERT  
-
 ```java
 	EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     Notes notes = new Notes();
@@ -96,7 +105,7 @@ INSERT
     notes.body = "Hello World1";
     long id = manager.insert(notes);
 
-	// ## YOU can excludes null members using manager#insertExcludesNull()
+	// ## Null除外する際は、insertExcludesNullが使用可能です。
     Notes notes = new Notes();
     notes.title = null;
     notes.body = "Hello World1";
@@ -113,7 +122,7 @@ UPDATE
     notes.body = "Hello World1";
     manager.update(notes);
 
-	// YOU can excludes Null members using manager#upfateExcludesNull()
+	// ## Null除外する際は、updateExcludesNullが使用可能です。
 	Notes notes = new Notes();
     long id = 111l;
     notes.id = id;
@@ -121,12 +130,11 @@ UPDATE
     notes.body = "Hello World1";
     manager.updateExcludesNull(notes);
 	
-    // You can update using SQLiteDatabase-like interface
+    // ## SQliteDatabaseと同じIFでの更新
     ContentValues value = new ContentValues();
     value.put(Notes.TITLE, "TEST");
     manager.updateById(Notes.class, value, 1l);
 ```
-
 DELETE
 ```java
     EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
@@ -135,30 +143,27 @@ DELETE
     notes.id = id;
     manager.delete(notes);
 
-    // using Entity class and id
+    // Class と IDを指定して削除する
     manager.deleteById(Notes.class, 111l);
-    // using Entity class and Selection String and bindParams
+    // Class Where句 Bind変数を指定して削除する
     manager.delete(Notes.class, "_id=?", 111l);
-    // using SQLiteDatabase-like interface
+    // Table Where句 Bind変数を指定して削除する
     manager.delete("NOTES",  "_id=?", 111l);	
 ```
 
-### QueryObject CRUD
-
-You can create QueryObject by method of EntityManager which start with the "new" prefix
-
+### クエリオブジェクトを使用したCRUD  
+クエリオブジェクトはentitymanagrのnew...で始まるメソッドを使用して生成します。  
 INSERT
 ```java
     EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     manager.newInsertInto(Notes.class).value(Notes.TITLE, "TEST").execute();
 	
-    // static import monotalk.db.query.QueryUtils#from()
-    // You can create ContentsValue from Entity
+    // monotalk.db.query.QueryUtils#from()をstatic importして、 
+    // EntityオブジェクトからContentsValueを生成して登録します。
     EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
     Notes notes = new Notes();
     notes.body = "Hello World1";
-    // Method "values"'s  second parameter is includesColumns
-    manager.newInsert(Notes.class).values(from(notes), "TITLE").execute();
+    manager.newInsert(Notes.class).values(from(notes, Notes.TITLE)).execute();
 	
 ```
 UPDATE
@@ -168,9 +173,11 @@ UPDATE
                 .value("TITLE", "Hello")
                 .where("_id").eq(111l);
         
+		
         Notes notes = new Notes();
         notes.id = 100l;
-        // static import monotalk.db.query.QueryUtils#idEquals() 
+        // monotalk.db.query.QueryUtils#idEquals()をstatic importして、 
+        // EntityオブジェクトからContentsValueを生成して登録します。
         manager.newUpdate(Notes.class).as("Notes")
                 .value("TITLE", "Hello")
                 .where(idEquals(notes));
@@ -194,7 +201,7 @@ SELECT
 ```java 
         EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
         
-        // as Cursor
+        // Cursorで取得
         Cursor cursor = manager.newSelect(
                 "TITLE",
                 "BODY",
@@ -205,7 +212,7 @@ SELECT
                 .limit(2)
                 .offset(3).selectCursor();
 
-        // as One Entity
+        // Entity 1要素を取得
         Notes notes = manager.newSelect(
                 "TITLE",
                 "BODY",
@@ -215,7 +222,7 @@ SELECT
                 .orderBy("TITLE")
                 .selectOne();
 
-        // as EntityList
+        // EntityListで取得
         List<Notes> noteList = manager.newSelect(
                 "TITLE",
                 "BODY",
@@ -225,7 +232,7 @@ SELECT
                 .orderBy("TITLE")
                 .selectList();
 
-        // as LazyList
+        // LazyListで取得
         LazyList<Notes> noteList = manager.newSelect(
                 "TITLE",
                 "BODY",
@@ -235,13 +242,13 @@ SELECT
                 .orderBy("TITLE")
                 .selectLazyList();
 
-        // as Scalar
+        // スカラー値を取得
         long count = manager.newSelect(countRowIdAsCount())
                 .from(Notes.class)
                 .where("DATE").eq(new Date())
                 .selectScalar(Long.class);
 
-        // You can map to your POJO or using Rowmapper
+        // Entityではないものにマッピングして取得
         String title = manager.newSelect(countRowIdAsCount())
                 .from(Notes.class)
                 .where("DATE").eq(new Date())
@@ -253,58 +260,34 @@ SELECT
                 });
 ```
 
-### SELECT using TwoWaySQL
-###### What is TwoWaySQL
-'TwoWaySQL' is a concept, looks like a Template Engine for SQL.
-This is based on Japanese O/R mapping framework [DBFlute](http://dbflute.seasar.org)
-2WaySQL is the plain old SQL template. You can specify parameters and conditions using SQL comment.
-So these SQLs are executable using SQL client tools.
-
-
-``` asset/com/example/Notes/select.sql
+### TWOWAYSQLを使用したSELECT  
+``` select.sql
    SELECT 
-     TITLE,
+         TITLE,
 	 BODY,
 	 DATE
-   FROM 
-     NOTES 
+    FROM 
+         NOTES 
     /*BEGIN*/
     WHERE
-       /*IF pmb.date != null*/ 
-	   DATE = /*pmb.date*/33333333333
-	   /*END*/ 
+        /*IF pmb.date != null*/ 
+	DATE = /*pmb.date*/33333333333
+	/*END*/ 
     /*END*/ 
 ```
-
-you select data by TwoWaySql using <code>manager.newSelectBySqlFile()</code>
-if Notes.class's packageName is com.example  
-framework references asset/com/example/Notes/select.sql and execute
+上記のクエリを以下の記述で実行可能です。
+仮に Notes.classのパッケージがcom.exampleであった場合は  
+assetディレクトリ配下の asset/com/example/Notes/select.sql を参照し、実行します。
 
 ```java
     EntityManager manager = MonoTalk.getDBManagerByDefaultDbName();
-    // as cursor
+    // cursorで取得
     Cursor cursor = manager.newSelectBySqlFile(Notes.class, "select.sql")
                .setParameter("date", new Date())
                .selectCursor();
-               
 ```
+*TWOWAYSQL parser実装は、[DBFlute](http://dbflute.seasar.org)のTWOWAYSQL parserを拝借しています。
 
-### License
-```java
-/*******************************************************************************
- * Copyright (C) 2013-2015 Kem
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- ******************************************************************************/
-```
-
+###TODO
+ContentProvider関連の機能のドキュメントを記述する  
+Annotation Processorの実装..  
