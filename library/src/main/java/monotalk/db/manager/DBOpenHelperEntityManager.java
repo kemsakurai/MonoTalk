@@ -172,4 +172,9 @@ public class DBOpenHelperEntityManager extends BaseEntityManager implements Quer
     public Cursor selectCursorBySqlFile(TwoWayQueryData data) {
         return mDmlExecutor.selectCursorBySqlFile(data.getSqlFilePath(), data.getMapPmb());
     }
+
+    @Override
+    public Integer executeBySqlFile(TwoWayQueryData data) {
+        return mDmlExecutor.executeBySqlFile(data.getSqlFilePath(), data.getMapPmb());
+    }
 }

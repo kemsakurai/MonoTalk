@@ -604,4 +604,8 @@ public class DmlExecutor {
         }.execute();
         return cursor;
     }
+
+    public Integer executeBySqlFile(String sqlFilePath, SimpleMapPmb<Object> mapPmb) {
+            return null;
+    }
 }

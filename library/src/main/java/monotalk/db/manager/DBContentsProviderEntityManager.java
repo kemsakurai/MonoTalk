@@ -251,4 +251,10 @@ public class DBContentsProviderEntityManager extends BaseEntityManager {
         Uri uri = data.buildTwoWaySqlUri(mAuthorityUri);
         return crudHandler.query(uri, null, null, null, null);
     }
+    
+    @Override
+    public Integer executeBySqlFile(TwoWayQueryData queryData) {
+        queryData.get
+        return null;
+    }
 }
